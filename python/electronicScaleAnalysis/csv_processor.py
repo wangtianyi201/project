@@ -9,6 +9,86 @@ plt.rcParams["font.family"] = ["SimHei", "WenQuanYi Micro Hei", "Heiti TC"]
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 
+def calculate_z_scores(test_ratios, reference_ratios):
+    """计算测试数据比值相对于参考数据比值的Z-score，并判断异常程度
+
+    Args:
+        test_ratios (list): 测试数据的比值列表
+        reference_ratios (list): 参考数据的比值列表
+
+    Returns:
+        list: 包含Z-score值和异常程度的字典列表
+    """
+    if not reference_ratios or len(reference_ratios) < 2:
+        print("警告: 参考数据不足，无法计算Z-score")
+        return []
+
+    # 计算参考数据的均值和标准差
+    ref_mean = statistics.mean(reference_ratios)
+    ref_std = statistics.stdev(reference_ratios)
+
+    if ref_std == 0:
+        print("警告: 参考数据的标准差为0，无法计算Z-score")
+        return []
+
+    # 计算每个测试数据的Z-score并判断异常程度
+    z_score_results = []
+    for ratio in test_ratios:
+        z_score = (ratio - ref_mean) / ref_std
+        abs_z = abs(z_score)
+        if abs_z > 3:
+            anomaly = "重度异常"
+        elif abs_z > 2:
+            anomaly = "轻度异常"
+        else:
+            anomaly = "正常"
+        z_score_results.append({
+            'z_score': z_score,
+            'anomaly': anomaly
+        })
+
+    return z_score_results
+
+
+def analyze_file_and_get_ratios(file_path, ad_column='称重AD值', zero_ad_column='零点AD值', weight_column='重量(kg)'):
+    """分析文件并获取比值列表
+
+    Args:
+        file_path (str): 文件路径
+        ad_column (str): 称重AD值列名
+        zero_ad_column (str): 零点AD值列名
+        weight_column (str): 重量值列名
+
+    Returns:
+        list: 比值列表
+    """
+    processor = CSVProcessor()
+
+    try:
+        data = processor.read_csv(file_path)
+        print(f"成功读取 {file_path} 中的 {len(data)} 条记录")
+    except FileNotFoundError as e:
+        print(e)
+        return []
+
+    valid_ratios = []
+
+    for row in data:
+        try:
+            ad_value = float(row[ad_column])
+            zero_ad_value = float(row[zero_ad_column])
+            weight_value = float(row[weight_column])
+
+            k_value = ad_value - zero_ad_value
+            ratio = k_value / weight_value / 1000 if weight_value != 0 else 0
+
+            valid_ratios.append(ratio)
+        except (ValueError, KeyError) as e:
+            continue
+
+    return valid_ratios
+
+
 class CSVProcessor:
     """CSV文件处理器，提供读取、处理和写入CSV文件的功能"""
 
@@ -187,47 +267,6 @@ class CSVProcessor:
             print()
 
 
-# def analyze_weight_data(file_path, product_column='商品名称', weight_column='重量'):
-#     """分析称重数据CSV文件
-#
-#     Args:
-#         file_path (str): CSV文件路径
-#         product_column (str): 商品名称列名
-#         weight_column (str): 重量数据列名
-#     """
-#     processor = CSVProcessor()
-#
-#     # 读取数据
-#     try:
-#         data = processor.read_csv(file_path)
-#         print(f"成功读取 {len(data)} 条记录")
-#     except FileNotFoundError as e:
-#         print(e)
-#         return
-#
-#     # 按商品名称分类数据
-#     grouped_data = processor.group_by_product(data, product_column)
-#
-#     # 对每种商品进行描述性分析
-#     print(f"\n按'{product_column}'分类的描述性分析:")
-#     print("=" * 80)
-#
-#     for product_name, product_data in grouped_data.items():
-#         print(f"\n商品: {product_name}")
-#         print(f"样本数量: {len(product_data)}")
-#
-#         # 进行描述性分析
-#         analysis = processor.descriptive_analysis(product_data, weight_column)
-#
-#         if analysis['count'] > 0:
-#             print(f"  均值: {analysis['mean']:.4f}")
-#             print(f"  中位数: {analysis['median']:.4f}")
-#             print(f"  标准差: {analysis['std_dev']:.4f}")
-#             print(f"  最小值: {analysis['min']:.4f}")
-#             print(f"  最大值: {analysis['max']:.4f}")
-#         else:
-#             print("  无有效重量数据")
-
 
 def analyze_weight_data(file_path, ad_column='称重AD值', zero_ad_column='零点AD值', weight_column='重量(kg)'):
     """分析称重数据CSV文件，计算K值和比值
@@ -324,29 +363,62 @@ def analyze_weight_data(file_path, ad_column='称重AD值', zero_ad_column='零�
 """
 def single_scale_example_usage():
     """示例用法"""
-    processor = CSVProcessor()
-
-
-    # 1、基准数据准备
-    # 使用绝对路径读取设备数据文件
+    # 获取当前目录
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 定义文件路径
+    test_file = os.path.join(current_dir, '测试数据.csv')
     device_file = os.path.join(current_dir, '设备3PLBJ0700_称重数据_2025-01-01_2025-08-25.csv')
     
+    # 检查文件是否存在
+    if not os.path.exists(test_file):
+        print(f"错误: 找不到测试数据文件 '{test_file}'")
+        return
+    
+    if not os.path.exists(device_file):
+        print(f"错误: 找不到设备数据文件 '{device_file}'")
+        return
 
-    if os.path.exists(device_file):
-        print(f"将读取设备数据文件: {device_file}")
-        data = processor.read_csv(device_file)
-        processor.display_all_columns(data)
-        # 设备数据文件中的重量列名为'重量(kg)'，需要指定该参数
-        analyze_weight_data(device_file, weight_column='重量(kg)')
-    else:
-        print(f"错误: 找不到数据文件")
+    # # 对比值进行描述性分析
+    # print("\n测试数据比值的描述性分析:")
+    # analyze_weight_data(test_file)
+    #
+    print("\n设备数据比值的描述性分析:")
+    analyze_weight_data(device_file)
 
+    
+    # 分析文件并获取比值
+    print("正在分析测试数据文件...")
+    test_ratios = analyze_file_and_get_ratios(test_file)
+    
+    print("正在分析设备数据文件...")
+    device_ratios = analyze_file_and_get_ratios(device_file)
+    
+    # 检查是否有足够的有效比值
+    if not test_ratios:
+        print("错误: 测试数据中没有有效比值")
+        return
+    
+    if len(device_ratios) < 2:
+        print("错误: 设备数据中有效比值不足")
+        return
 
-    #2、测试数据准备
-    # 使用绝对路径读取设备数据文件
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    test_file = os.path.join(current_dir, '测试数据.csv')
+    print(test_ratios)
+    print("##########")
+    print(device_ratios)
+
+    # 计算Z-score
+    z_score_results = calculate_z_scores(test_ratios, device_ratios)
+    
+    if z_score_results:
+        print("\nZ-score计算结果:")
+        print("=" * 60)
+        print(f"{'数据点':<10}{'Z-score值':<15}{'异常程度':<15}")
+        print("=" * 60)
+        for i, result in enumerate(z_score_results):
+            z = result['z_score']
+            anomaly = result['anomaly']
+            print(f"{i+1:<10}{z:<15.4f}{anomaly:<15}")
 
 
 if __name__ == '__main__':
