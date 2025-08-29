@@ -848,6 +848,138 @@ def time_based_weight_statistics():
                 line += f"{top3_str:<40}"
             print(line)
     
+    # 计算每周周内和周末对比统计
+    print("\n" + "="*80)
+    print("每周周内(工作日)和周末称重对比统计")
+    print("="*80)
+    
+    # 按周分组周内和周末数据
+    weekly_weekday_stats = defaultdict(list)
+    weekly_weekend_stats = defaultdict(list)
+    weekly_weekday_products = defaultdict(list)
+    weekly_weekend_products = defaultdict(list)
+    
+    for row in processed_data:
+        week_key = f"{row['iso_year']}-W{row['week']:02d}"
+        # 判断是否为周末 (5=周六, 6=周日)
+        is_weekend = row['parsed_time'].weekday() >= 5
+        
+        if is_weekend:
+            weekly_weekend_stats[week_key].append(row['weight'])
+            if product_column and row.get('product_name') and row['weight'] > 0:
+                weekly_weekend_products[week_key].append(row['product_name'])
+        else:
+            weekly_weekday_stats[week_key].append(row['weight'])
+            if product_column and row.get('product_name') and row['weight'] > 0:
+                weekly_weekday_products[week_key].append(row['product_name'])
+    
+    # 输出周内和周末对比统计
+    header_weekday_weekend = f"{'周次':<12}{'类型':<8}{'称重次数':<10}{'重量均值(kg)':<15}{'重量标准差':<15}{'最小重量':<12}{'最大重量':<12}"
+    if product_column:
+        header_weekday_weekend += f"{'Top3商品(次数)':<40}"
+    print(header_weekday_weekend)
+    print("-"*80)
+    
+    weekly_weekday_weekend_results = {}
+    for week in sorted(set(list(weekly_weekday_stats.keys()) + list(weekly_weekend_stats.keys()))):
+        # 周内统计
+        if week in weekly_weekday_stats:
+            weekday_stats = calculate_statistics(weekly_weekday_stats[week])
+            if weekday_stats:
+                # 计算Top3商品
+                top3_str = ''
+                top3 = []
+                if product_column:
+                    names = weekly_weekday_products.get(week, [])
+                    if names:
+                        counts = Counter(names)
+                        top3 = sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:3]
+                        top3_str = ", ".join([f"{name}({cnt})" for name, cnt in top3])
+                
+                weekly_weekday_weekend_results[f"{week}_weekday"] = {**weekday_stats, **({ 'top3_products': top3 } if product_column else {})}
+                line = f"{week:<12}{'周内':<8}{weekday_stats['count']:<10}{weekday_stats['mean']:<15.2f}{weekday_stats['std_dev']:<15.2f}{weekday_stats['min']:<12.2f}{weekday_stats['max']:<12.2f}"
+                if product_column:
+                    line += f"{top3_str:<40}"
+                print(line)
+        
+        # 周末统计
+        if week in weekly_weekend_stats:
+            weekend_stats = calculate_statistics(weekly_weekend_stats[week])
+            if weekend_stats:
+                # 计算Top3商品
+                top3_str = ''
+                top3 = []
+                if product_column:
+                    names = weekly_weekend_products.get(week, [])
+                    if names:
+                        counts = Counter(names)
+                        top3 = sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:3]
+                        top3_str = ", ".join([f"{name}({cnt})" for name, cnt in top3])
+                
+                weekly_weekday_weekend_results[f"{week}_weekend"] = {**weekend_stats, **({ 'top3_products': top3 } if product_column else {})}
+                line = f"{week:<12}{'周末':<8}{weekend_stats['count']:<10}{weekend_stats['mean']:<15.2f}{weekend_stats['std_dev']:<15.2f}{weekend_stats['min']:<12.2f}{weekend_stats['max']:<12.2f}"
+                if product_column:
+                    line += f"{top3_str:<40}"
+                print(line)
+    
+    # 计算周内和周末的总体对比统计
+    print("\n" + "-"*80)
+    print("周内(工作日) vs 周末 总体对比统计")
+    print("-"*80)
+    
+    # 合并所有周内数据
+    all_weekday_weights = []
+    all_weekday_products = []
+    for weights in weekly_weekday_stats.values():
+        all_weekday_weights.extend(weights)
+    for products in weekly_weekday_products.values():
+        all_weekday_products.extend(products)
+    
+    # 合并所有周末数据
+    all_weekend_weights = []
+    all_weekend_products = []
+    for weights in weekly_weekend_stats.values():
+        all_weekend_weights.extend(weights)
+    for products in weekly_weekend_products.values():
+        all_weekend_products.extend(products)
+    
+    # 计算总体统计
+    weekday_total_stats = calculate_statistics(all_weekday_weights)
+    weekend_total_stats = calculate_statistics(all_weekend_weights)
+    
+    if weekday_total_stats and weekend_total_stats:
+        print(f"{'类型':<8}{'称重次数':<10}{'重量均值(kg)':<15}{'重量标准差':<15}{'最小重量':<12}{'最大重量':<12}")
+        print("-"*80)
+        
+        # 周内总体统计
+        line = f"{'周内':<8}{weekday_total_stats['count']:<10}{weekday_total_stats['mean']:<15.2f}{weekday_total_stats['std_dev']:<15.2f}{weekday_total_stats['min']:<12.2f}{weekday_total_stats['max']:<12.2f}"
+        print(line)
+        
+        # 周末总体统计
+        line = f"{'周末':<8}{weekend_total_stats['count']:<10}{weekend_total_stats['mean']:<15.2f}{weekend_total_stats['std_dev']:<15.2f}{weekend_total_stats['min']:<12.2f}{weekend_total_stats['max']:<12.2f}"
+        print(line)
+        
+        # 计算差异百分比
+        count_diff_pct = ((weekend_total_stats['count'] - weekday_total_stats['count']) / weekday_total_stats['count'] * 100) if weekday_total_stats['count'] > 0 else 0
+        mean_diff_pct = ((weekend_total_stats['mean'] - weekday_total_stats['mean']) / weekday_total_stats['mean'] * 100) if weekday_total_stats['mean'] > 0 else 0
+        
+        print(f"\n差异分析:")
+        print(f"称重次数差异: 周末比周内 {count_diff_pct:+.1f}%")
+        print(f"重量均值差异: 周末比周内 {mean_diff_pct:+.1f}%")
+        
+        # Top3商品对比
+        if product_column:
+            print(f"\nTop3商品对比:")
+            if all_weekday_products:
+                weekday_counts = Counter(all_weekday_products)
+                weekday_top3 = sorted(weekday_counts.items(), key=lambda x: (-x[1], x[0]))[:3]
+                print(f"周内Top3: {', '.join([f'{name}({cnt})' for name, cnt in weekday_top3])}")
+            
+            if all_weekend_products:
+                weekend_counts = Counter(all_weekend_products)
+                weekend_top3 = sorted(weekend_counts.items(), key=lambda x: (-x[1], x[0]))[:3]
+                print(f"周末Top3: {', '.join([f'{name}({cnt})' for name, cnt in weekend_top3])}")
+    
     # 计算每月统计
     print("\n" + "="*80)
     print("每月称重统计")
@@ -993,6 +1125,7 @@ def time_based_weight_statistics():
     return {
         'daily': daily_results,
         'weekly': weekly_results,
+        'weekly_weekday_weekend': weekly_weekday_weekend_results,
         'monthly': monthly_results
     }
 
