@@ -6,8 +6,8 @@ from collections import defaultdict
 from scipy import stats
 import numpy as np
 
-# 设置matplotlib支持中文显示
-plt.rcParams["font.family"] = ["SimHei", "WenQuanYi Micro Hei", "Heiti TC"]
+# 设置matplotlib支持中文显示 - 使用Windows系统常见中文字体
+plt.rcParams["font.family"] = ["SimHei", "Microsoft YaHei", "sans-serif"]
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 
@@ -614,6 +614,395 @@ def single_scale_example_usage():
             print("=" * 100)
 
 
+"""
+按时间分组统计称重数据
+"""
+def time_based_weight_statistics():
+    """按每日、每周、每月时间计算称重的次数，重量的均值、标准差"""
+    # 获取当前目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 定义文件路径
+    data_file = os.path.join(current_dir, '设备L30DG0091_称重数据_2025-05-31_2025-08-28.csv')
+    
+    # 检查文件是否存在
+    if not os.path.exists(data_file):
+        print(f"错误: 找不到数据文件 '{data_file}'")
+        return
+    
+    # 创建CSV处理器
+    processor = CSVProcessor()
+    
+    try:
+        # 读取数据
+        data = processor.read_csv(data_file)
+        print(f"成功读取 {len(data)} 条记录")
+    except FileNotFoundError as e:
+        print(e)
+        return
+    
+    # 检查数据是否包含必要的列
+    if not data:
+        print("错误: 数据文件为空")
+        return
+    
+    # 检查必要的列是否存在（支持多种可能的列名）
+    time_column = None
+    weight_column = None
+    product_column = None
+    
+    # 查找时间列（支持多种可能的名称）
+    for col in data[0].keys():
+        if '时间' in col or '订单时间' in col or '创建时间' in col:
+            time_column = col
+            break
+    
+    # 查找重量列
+    for col in data[0].keys():
+        if '重量' in col:
+            weight_column = col
+            break
+    
+    # 查找商品名称列（尽量匹配更明确的列名）
+    for col in data[0].keys():
+        if ('商品' in col) or ('品名' in col) or ('产品' in col) or ('菜品' in col):
+            product_column = col
+            break
+    
+    if not time_column or not weight_column:
+        print(f"错误: 缺少必要的列")
+        print(f"可用列: {list(data[0].keys())}")
+        print(f"需要找到时间列和重量列")
+        return
+    
+    print(f"使用时间列: {time_column}")
+    print(f"使用重量列: {weight_column}")
+    if product_column:
+        print(f"使用商品列: {product_column}")
+    
+    # 数据预处理：解析时间并过滤有效数据
+    processed_data = []
+    for row in data:
+        try:
+            # 解析称重时间
+            time_str = row[time_column]
+            weight = float(row[weight_column])
+            
+            # 尝试多种时间格式
+            import datetime
+            parsed_time = None
+            
+            # 尝试常见的时间格式
+            time_formats = [
+                '%Y-%m-%dT%H:%M:%S',  # ISO 8601格式: 2025-08-21T07:31:40
+                '%Y-%m-%d %H:%M:%S',
+                '%Y/%m/%d %H:%M:%S',
+                '%Y-%m-%d %H:%M',
+                '%Y/%m/%d %H:%M',
+                '%Y-%m-%d',
+                '%Y/%m/%d'
+            ]
+            
+            for fmt in time_formats:
+                try:
+                    parsed_time = datetime.datetime.strptime(time_str, fmt)
+                    break
+                except ValueError:
+                    continue
+            
+            if parsed_time is None:
+                print(f"警告: 无法解析时间格式: {time_str}")
+                continue
+            
+            # 添加解析后的时间信息
+            row['parsed_time'] = parsed_time
+            row['date'] = parsed_time.date()
+            iso_year, iso_week, _ = parsed_time.isocalendar()
+            row['iso_year'] = iso_year
+            row['week'] = iso_week  # ISO周数
+            row['month'] = parsed_time.month
+            row['year'] = parsed_time.year
+            row['weight'] = weight
+            if product_column:
+                row['product_name'] = (row.get(product_column) or '').strip()
+            
+            processed_data.append(row)
+            
+        except (ValueError, KeyError) as e:
+            continue
+    
+    if not processed_data:
+        print("错误: 没有有效的数据可处理")
+        return
+    
+    print(f"成功处理 {len(processed_data)} 条有效记录")
+    
+    # 按时间分组统计
+    daily_stats = defaultdict(list)
+    weekly_stats = defaultdict(list)
+    monthly_stats = defaultdict(list)
+    
+    # 商品名称收集（仅记录重量>0且有商品名的记录）
+    from collections import Counter
+    daily_product_names = defaultdict(list)
+    weekly_product_names = defaultdict(list)
+    monthly_product_names = defaultdict(list)
+    
+    for row in processed_data:
+        # 按日期分组
+        date_key = row['date']
+        daily_stats[date_key].append(row['weight'])
+        if product_column and row.get('product_name') and row['weight'] > 0:
+            daily_product_names[date_key].append(row['product_name'])
+        
+        # 按周分组
+        week_key = f"{row['iso_year']}-W{row['week']:02d}"
+        weekly_stats[week_key].append(row['weight'])
+        if product_column and row.get('product_name') and row['weight'] > 0:
+            weekly_product_names[week_key].append(row['product_name'])
+        
+        # 按月分组
+        month_key = f"{row['year']}-{row['month']:02d}"
+        monthly_stats[month_key].append(row['weight'])
+        if product_column and row.get('product_name') and row['weight'] > 0:
+            monthly_product_names[month_key].append(row['product_name'])
+    
+    # 计算统计信息
+    def calculate_statistics(weight_list):
+        """计算重量列表的统计信息"""
+        if not weight_list:
+            return None
+        
+        weights = [w for w in weight_list if w > 0]  # 过滤掉零重量或负重量
+        if not weights:
+            return None
+        
+        return {
+            'count': len(weights),
+            'mean': statistics.mean(weights),
+            'std_dev': statistics.stdev(weights) if len(weights) > 1 else 0.0,
+            'min': min(weights),
+            'max': max(weights)
+        }
+    
+    # 计算每日统计
+    print("\n" + "="*80)
+    print("每日称重统计")
+    print("="*80)
+    header_daily = f"{'日期':<12}{'称重次数':<10}{'重量均值(kg)':<15}{'重量标准差':<15}{'最小重量':<12}{'最大重量':<12}"
+    if product_column:
+        header_daily += f"{'Top3商品(次数)':<40}"
+    print(header_daily)
+    print("-"*80)
+    
+    daily_results = {}
+    for date in sorted(daily_stats.keys()):
+        stats = calculate_statistics(daily_stats[date])
+        if stats:
+            # 将日期转换为字符串格式作为键
+            date_key = date.strftime('%Y-%m-%d')
+            # 计算Top3商品
+            top3_str = ''
+            counts = {}
+            top3 = []
+            if product_column:
+                names = daily_product_names.get(date, [])
+                if names:
+                    counts = Counter(names)
+                    top3 = sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:3]
+                    top3_str = ", ".join([f"{name}({cnt})" for name, cnt in top3])
+            # 保存与输出
+            daily_results[date_key] = {**stats, **({ 'top3_products': top3 } if product_column else {})}
+            line = f"{date_key:<12}{stats['count']:<10}{stats['mean']:<15.2f}{stats['std_dev']:<15.2f}{stats['min']:<12.2f}{stats['max']:<12.2f}"
+            if product_column:
+                line += f"{top3_str:<40}"
+            print(line)
+    
+    # 计算每周统计
+    print("\n" + "="*80)
+    print("每周称重统计")
+    print("="*80)
+    header_weekly = f"{'周次':<12}{'称重次数':<10}{'重量均值(kg)':<15}{'重量标准差':<15}{'最小重量':<12}{'最大重量':<12}"
+    if product_column:
+        header_weekly += f"{'Top3商品(次数)':<40}"
+    print(header_weekly)
+    print("-"*80)
+    
+    weekly_results = {}
+    for week in sorted(weekly_stats.keys()):
+        stats = calculate_statistics(weekly_stats[week])
+        if stats:
+            # 计算Top3商品
+            top3_str = ''
+            counts = {}
+            top3 = []
+            if product_column:
+                names = weekly_product_names.get(week, [])
+                if names:
+                    counts = Counter(names)
+                    top3 = sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:3]
+                    top3_str = ", ".join([f"{name}({cnt})" for name, cnt in top3])
+            weekly_results[week] = {**stats, **({ 'top3_products': top3 } if product_column else {})}
+            line = f"{week:<12}{stats['count']:<10}{stats['mean']:<15.2f}{stats['std_dev']:<15.2f}{stats['min']:<12.2f}{stats['max']:<12.2f}"
+            if product_column:
+                line += f"{top3_str:<40}"
+            print(line)
+    
+    # 计算每月统计
+    print("\n" + "="*80)
+    print("每月称重统计")
+    print("="*80)
+    header_monthly = f"{'月份':<12}{'称重次数':<10}{'重量均值(kg)':<15}{'重量标准差':<15}{'最小重量':<12}{'最大重量':<12}"
+    if product_column:
+        header_monthly += f"{'Top3商品(次数)':<40}"
+    print(header_monthly)
+    print("-"*80)
+    
+    monthly_results = {}
+    for month in sorted(monthly_stats.keys()):
+        stats = calculate_statistics(monthly_stats[month])
+        if stats:
+            # 计算Top3商品
+            top3_str = ''
+            counts = {}
+            top3 = []
+            if product_column:
+                names = monthly_product_names.get(month, [])
+                if names:
+                    counts = Counter(names)
+                    top3 = sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:3]
+                    top3_str = ", ".join([f"{name}({cnt})" for name, cnt in top3])
+            monthly_results[month] = {**stats, **({ 'top3_products': top3 } if product_column else {})}
+            line = f"{month:<12}{stats['count']:<10}{stats['mean']:<15.2f}{stats['std_dev']:<15.2f}{stats['min']:<12.2f}{stats['max']:<12.2f}"
+            if product_column:
+                line += f"{top3_str:<40}"
+            print(line)
+    
+    # # 生成可视化图表
+    # try:
+    #     # 创建图表
+    #     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    #     fig.suptitle('称重数据时间分布统计', fontsize=16, fontweight='bold')
+        
+    #     # 1. 每日称重次数趋势
+    #     if daily_results:
+    #         dates = list(daily_results.keys())
+    #         counts = [daily_results[date]['count'] for date in dates]
+            
+    #         axes[0, 0].plot(dates, counts, marker='o', linewidth=2, markersize=4)
+    #         axes[0, 0].set_title('每日称重次数趋势')
+    #         axes[0, 0].set_xlabel('日期')
+    #         axes[0, 0].set_ylabel('称重次数')
+    #         axes[0, 0].tick_params(axis='x', rotation=45)
+    #         axes[0, 0].grid(True, alpha=0.3)
+        
+    #     # 2. 每日重量均值趋势
+    #     if daily_results:
+    #         means = [daily_results[date]['mean'] for date in dates]
+            
+    #         axes[0, 1].plot(dates, means, marker='s', linewidth=2, markersize=4, color='orange')
+    #         axes[0, 1].set_title('每日重量均值趋势')
+    #         axes[0, 1].set_xlabel('日期')
+    #         axes[0, 1].set_ylabel('重量均值(kg)')
+    #         axes[0, 1].tick_params(axis='x', rotation=45)
+    #         axes[0, 1].grid(True, alpha=0.3)
+        
+    #     # 3. 每周称重次数对比
+    #     if weekly_results:
+    #         weeks = list(weekly_results.keys())
+    #         week_counts = [weekly_results[week]['count'] for week in weeks]
+            
+    #         axes[1, 0].bar(weeks, week_counts, color='skyblue', alpha=0.7)
+    #         axes[1, 0].set_title('每周称重次数对比')
+    #         axes[1, 0].set_xlabel('周次')
+    #         axes[1, 0].set_ylabel('称重次数')
+    #         axes[1, 0].tick_params(axis='x', rotation=45)
+    #         axes[1, 0].grid(True, alpha=0.3)
+        
+    #     # 4. 每月重量标准差对比
+    #     if monthly_results:
+    #         months = list(monthly_results.keys())
+    #         month_stds = [monthly_results[month]['std_dev'] for month in months]
+            
+    #         axes[1, 1].bar(months, month_stds, color='lightcoral', alpha=0.7)
+    #         axes[1, 1].set_title('每月重量标准差对比')
+    #         axes[1, 1].set_xlabel('月份')
+    #         axes[1, 1].set_ylabel('重量标准差(kg)')
+    #         axes[1, 1].tick_params(axis='x', rotation=45)
+    #         axes[1, 1].grid(True, alpha=0.3)
+        
+    #     plt.tight_layout()
+    #     plt.show()
+        
+    # except Exception as e:
+    #     print(f"生成图表时出错: {e}")
+    
+    # # 保存统计结果到CSV文件
+    # try:
+    #     # 保存每日统计
+    #     daily_output_file = os.path.join(current_dir, '每日称重统计.csv')
+    #     daily_csv_data = []
+    #     for date, stats in daily_results.items():
+    #         daily_csv_data.append({
+    #             '日期': str(date),
+    #             '称重次数': stats['count'],
+    #             '重量均值(kg)': round(stats['mean'], 2),
+    #             '重量标准差': round(stats['std_dev'], 2),
+    #             '最小重量(kg)': round(stats['min'], 2),
+    #             '最大重量(kg)': round(stats['max'], 2)
+    #         })
+        
+    #     processor.write_csv(daily_output_file, daily_csv_data)
+    #     print(f"\n每日统计结果已保存到: {daily_output_file}")
+        
+    #     # 保存每周统计
+    #     weekly_output_file = os.path.join(current_dir, '每周称重统计.csv')
+    #     weekly_csv_data = []
+    #     for week, stats in weekly_results.items():
+    #         weekly_csv_data.append({
+    #             '周次': week,
+    #             '称重次数': stats['count'],
+    #             '重量均值(kg)': round(stats['mean'], 2),
+    #             '重量标准差': round(stats['std_dev'], 2),
+    #             '最小重量(kg)': round(stats['min'], 2),
+    #             '最大重量(kg)': round(stats['max'], 2)
+    #         })
+        
+    #     processor.write_csv(weekly_output_file, weekly_csv_data)
+    #     print(f"每周统计结果已保存到: {weekly_output_file}")
+        
+    #     # 保存每月统计
+    #     monthly_output_file = os.path.join(current_dir, '每月称重统计.csv')
+    #     monthly_csv_data = []
+    #     for month, stats in monthly_results.items():
+    #         monthly_csv_data.append({
+    #             '月份': month,
+    #             '称重次数': stats['count'],
+    #             '重量均值(kg)': round(stats['mean'], 2),
+    #             '重量标准差': round(stats['std_dev'], 2),
+    #             '最小重量(kg)': round(stats['min'], 2),
+    #             '最大重量(kg)': round(stats['max'], 2)
+    #         })
+        
+    #     processor.write_csv(monthly_output_file, monthly_csv_data)
+    #     print(f"每月统计结果已保存到: {monthly_output_file}")
+        
+    # except Exception as e:
+    #     print(f"保存CSV文件时出错: {e}")
+    
+    return {
+        'daily': daily_results,
+        'weekly': weekly_results,
+        'monthly': monthly_results
+    }
+
+
 if __name__ == '__main__':
-    # 1、单台秤的称重失准异常分析
-    single_scale_example_usage()
+    # # 1、单台秤的称重失准异常分析
+    # single_scale_example_usage()
+    
+    # 2、按时间分组的称重统计
+    print("\n" + "="*100)
+    print("开始按时间分组统计称重数据...")
+    print("="*100)
+    time_based_weight_statistics()
