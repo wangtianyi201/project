@@ -15,7 +15,7 @@ class WebVisualizationGenerator:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
     
-    def generate_html_page(self, statistics_data):
+    def generate_html_page(self, statistics_data, anomaly_data=None):
         """生成HTML页面"""
         html_content = f"""
 <!DOCTYPE html>
@@ -311,13 +311,6 @@ class WebVisualizationGenerator:
         }}
         
         /* 异常分析样式 */
-        .anomaly-tab-content {{
-            display: none;
-        }}
-        
-        .anomaly-tab-content.active {{
-            display: block;
-        }}
         
         .anomaly-severity {{
             padding: 4px 8px;
@@ -370,6 +363,17 @@ class WebVisualizationGenerator:
         .comparison-value {{
             font-size: 1.8em;
             font-weight: bold;
+        }}
+        
+        /* 无数据提示样式 */
+        .no-data {{
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+            font-size: 1.1em;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin: 20px 0;
         }}
         
         @media (max-width: 768px) {{
@@ -486,51 +490,29 @@ class WebVisualizationGenerator:
                             <div class="summary-value" id="z-anomaly-rate">-</div>
                         </div>
                         <div class="summary-card">
-                            <h4>IQR异常率</h4>
-                            <div class="summary-value" id="iqr-anomaly-rate">-</div>
+                            <h4>轻度异常数</h4>
+                            <div class="summary-value" id="mild-anomalies">-</div>
                         </div>
                         <div class="summary-card">
-                            <h4>共同异常数</h4>
-                            <div class="summary-value" id="common-anomalies">-</div>
+                            <h4>重度异常数</h4>
+                            <div class="summary-value" id="severe-anomalies">-</div>
                         </div>
                     </div>
                     
                     <!-- 异常分析图表 -->
                     <div class="chart-container">
-                        <div class="chart-title">📊 异常检测方法对比</div>
-                        <div class="chart-wrapper">
-                            <canvas id="anomalyComparisonChart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div class="chart-container">
-                        <div class="chart-title">📈 Z-score异常分布</div>
+                        <div class="chart-title">📊 Z-score异常分布</div>
                         <div class="chart-wrapper">
                             <canvas id="zScoreDistributionChart"></canvas>
                         </div>
                     </div>
                     
-                    <!-- 异常数据表格 -->
-                    <div class="nav-tabs">
-                        <button class="nav-tab active" onclick="showAnomalyTab('z-score')">Z-score异常</button>
-                        <button class="nav-tab" onclick="showAnomalyTab('iqr')">IQR异常</button>
-                        <button class="nav-tab" onclick="showAnomalyTab('comparison')">方法对比</button>
+                    <!-- 异常数据详情表格 -->
+                    <div class="data-table">
+                        <div class="table-title">📋 Z-score异常数据详情列表</div>
+                        <div id="anomaly-table"></div>
                     </div>
-                    
-                    <div id="z-score-anomalies" class="anomaly-tab-content active">
-                        <div class="table-title">Z-score异常数据详情</div>
-                        <div id="z-score-table"></div>
-                    </div>
-                    
-                    <div id="iqr-anomalies" class="anomaly-tab-content">
-                        <div class="table-title">IQR异常数据详情</div>
-                        <div id="iqr-table"></div>
-                    </div>
-                    
-                    <div id="comparison-anomalies" class="anomaly-tab-content">
-                        <div class="table-title">异常检测方法对比分析</div>
-                        <div id="comparison-table"></div>
-                    </div>
+
                 </div>
             </div>
         </div>
@@ -539,7 +521,7 @@ class WebVisualizationGenerator:
     <script>
         // 数据变量
         let statisticsData = {json.dumps(statistics_data, ensure_ascii=False, default=str)};
-        let anomalyData = null;
+        let anomalyData = {json.dumps(anomaly_data, ensure_ascii=False, default=str) if anomaly_data else 'null'};
         
         // 分页配置
         const paginationConfig = {{
@@ -553,8 +535,7 @@ class WebVisualizationGenerator:
             weekly: {{ currentPage: 1, totalPages: 1 }},
             monthly: {{ currentPage: 1, totalPages: 1 }},
             weeklyCompare: {{ currentPage: 1, totalPages: 1 }},
-            zScore: {{ currentPage: 1, totalPages: 1 }},
-            iqr: {{ currentPage: 1, totalPages: 1 }}
+            anomaly: {{ currentPage: 1, totalPages: 1 }}
         }};
         
         // 分页工具函数
@@ -632,12 +613,9 @@ class WebVisualizationGenerator:
             if (type === 'weekly-compare') {{
                 paginationState.weeklyCompare.currentPage = Math.max(1, Math.min(page, paginationState.weeklyCompare.totalPages));
                 renderTableWithPagination(tableId, statisticsData.weekly_weekday_weekend || {{}}, 'weekly_weekday_weekend');
-            }} else if (type === 'z-score') {{
-                paginationState.zScore.currentPage = Math.max(1, Math.min(page, paginationState.zScore.totalPages));
-                renderAnomalyTableWithPagination(tableId, anomalyData?.z_score_anomalies || [], 'z-score');
-            }} else if (type === 'iqr') {{
-                paginationState.iqr.currentPage = Math.max(1, Math.min(page, paginationState.iqr.totalPages));
-                renderAnomalyTableWithPagination(tableId, anomalyData?.iqr_anomalies || [], 'iqr');
+            }} else if (type === 'anomaly') {{
+                paginationState.anomaly.currentPage = Math.max(1, Math.min(page, paginationState.anomaly.totalPages));
+                renderAnomalyTableWithPagination(tableId, anomalyData ? anomalyData.z_score_anomalies : [], 'anomaly');
             }} else {{
                 paginationState[type].currentPage = Math.max(1, Math.min(page, paginationState[type].totalPages));
                 renderTableWithPagination(tableId, statisticsData[type] || {{}}, type);
@@ -650,12 +628,9 @@ class WebVisualizationGenerator:
             if (type === 'weekly-compare') {{
                 paginationState.weeklyCompare.currentPage = 1;
                 renderTableWithPagination(tableId, statisticsData.weekly_weekday_weekend || {{}}, 'weekly_weekday_weekend');
-            }} else if (type === 'z-score') {{
-                paginationState.zScore.currentPage = 1;
-                renderAnomalyTableWithPagination(tableId, anomalyData?.z_score_anomalies || [], 'z-score');
-            }} else if (type === 'iqr') {{
-                paginationState.iqr.currentPage = 1;
-                renderAnomalyTableWithPagination(tableId, anomalyData?.iqr_anomalies || [], 'iqr');
+            }} else if (type === 'anomaly') {{
+                paginationState.anomaly.currentPage = 1;
+                renderAnomalyTableWithPagination(tableId, anomalyData ? anomalyData.z_score_anomalies : [], 'anomaly');
             }} else {{
                 paginationState[type].currentPage = 1;
                 renderTableWithPagination(tableId, statisticsData[type] || {{}}, type);
@@ -689,9 +664,9 @@ class WebVisualizationGenerator:
                 renderWeeklyCompareTable();
             }} else if (tabName === 'anomaly') {{
                 if (anomalyData) {{
+                    renderAnomalyTableWithPagination('anomaly-table', anomalyData.z_score_anomalies || [], 'anomaly');
                     renderAnomalyCharts();
                     renderAnomalySummary();
-                    renderAnomalyTableWithPagination('z-score-table', anomalyData?.z_score_anomalies || [], 'z-score');
                 }} else {{
                     // 如果异常数据还未加载，显示加载提示
                     document.getElementById('anomaly-summary').innerHTML = '<div class="table-title">正在加载异常数据...</div>';
@@ -1191,6 +1166,57 @@ class WebVisualizationGenerator:
             tableContainer.innerHTML = tableHTML;
         }}
         
+        // 渲染异常数据表格（带分页）
+        function renderAnomalyTableWithPagination(tableId, anomalies, type) {{
+            const tableContainer = document.getElementById(tableId);
+            if (!anomalies || anomalies.length === 0) {{
+                tableContainer.innerHTML = '<div class="no-data">暂无异常数据</div>';
+                return;
+            }}
+            
+            const totalItems = anomalies.length;
+            const totalPages = Math.ceil(totalItems / paginationConfig.pageSize);
+            
+            // 更新分页状态
+            paginationState.anomaly.totalPages = totalPages;
+            const currentPage = paginationState.anomaly.currentPage;
+            
+            // 计算当前页的数据范围
+            const startIndex = (currentPage - 1) * paginationConfig.pageSize;
+            const endIndex = Math.min(startIndex + paginationConfig.pageSize, totalItems);
+            const currentPageAnomalies = anomalies.slice(startIndex, endIndex);
+            
+            // 生成分页控件HTML
+            const paginationHTML = createPaginationHTML(tableId, currentPage, totalPages, totalItems);
+            
+            // 生成表格HTML
+            let tableHTML = paginationHTML + '<div class="table-wrapper">';
+            tableHTML += '<table><thead><tr>' +
+                '<th>序号</th><th>Z-score值</th><th>异常程度</th><th>比值</th>' +
+                '<th>AD值</th><th>零点AD值</th><th>重量(kg)</th><th>商品名称</th>' +
+                '</tr></thead><tbody>';
+
+            currentPageAnomalies.forEach((anomaly, index) => {{
+                const globalIndex = startIndex + index + 1;
+                const severityClass = anomaly.anomaly === '重度异常' ? 'severe' : 
+                                    anomaly.anomaly === '轻度异常' ? 'mild' : 'normal';
+                
+                tableHTML += `<tr>
+                    <td>${{globalIndex}}</td>
+                    <td>${{anomaly.z_score.toFixed(3)}}</td>
+                    <td><span class="anomaly-severity ${{severityClass}}">${{anomaly.anomaly}}</span></td>
+                    <td>${{anomaly.ratio.toFixed(4)}}</td>
+                    <td>${{anomaly.ad_value || '-'}}</td>
+                    <td>${{anomaly.zero_ad_value || '-'}}</td>
+                    <td>${{anomaly.weight || '-'}}</td>
+                    <td>${{anomaly.product_name || '-'}}</td>
+                </tr>`;
+            }});
+
+            tableHTML += '</tbody></table></div>' + paginationHTML;
+            tableContainer.innerHTML = tableHTML;
+        }}
+        
         // 渲染数据表格（兼容旧版本，无分页）
         function renderTable(tableId, data, type) {{
             renderTableWithPagination(tableId, data, type);
@@ -1223,115 +1249,11 @@ class WebVisualizationGenerator:
             document.getElementById('total-days').textContent = validDays;
         }}
         
-        // 异常分析相关函数
-        function showAnomalyTab(tabName) {{
-            // 隐藏所有异常标签页内容
-            const anomalyTabContents = document.querySelectorAll('.anomaly-tab-content');
-            anomalyTabContents.forEach(content => content.classList.remove('active'));
-            
-            // 移除所有异常标签页的active类
-            const anomalyNavTabs = document.querySelectorAll('#anomaly .nav-tab');
-            anomalyNavTabs.forEach(tab => tab.classList.remove('active'));
-            
-            // 显示选中的异常标签页
-            document.getElementById(tabName + '-anomalies').classList.add('active');
-            event.target.classList.add('active');
-            
-            // 渲染对应的表格
-            if (tabName === 'z-score') {{
-                renderAnomalyTableWithPagination('z-score-table', anomalyData?.z_score_anomalies || [], 'z-score');
-            }} else if (tabName === 'iqr') {{
-                renderAnomalyTableWithPagination('iqr-table', anomalyData?.iqr_anomalies || [], 'iqr');
-            }} else if (tabName === 'comparison') {{
-                renderComparisonTable();
-            }}
-        }}
+        // 异常分析相关函数（已简化，只保留Z-score）
         
-        // 渲染异常数据表格（带分页）
-        function renderAnomalyTableWithPagination(tableId, anomalies, type) {{
-            const tableContainer = document.getElementById(tableId);
-            if (!anomalies || anomalies.length === 0) {{
-                tableContainer.innerHTML = '<div class="table-title">暂无异常数据</div>';
-                return;
-            }}
-            
-            const totalItems = anomalies.length;
-            const totalPages = Math.ceil(totalItems / paginationConfig.pageSize);
-            
-            // 更新分页状态
-            paginationState[type].totalPages = totalPages;
-            const currentPage = paginationState[type].currentPage;
-            
-            // 计算当前页的数据范围
-            const startIndex = (currentPage - 1) * paginationConfig.pageSize;
-            const endIndex = Math.min(startIndex + paginationConfig.pageSize, totalItems);
-            const currentPageAnomalies = anomalies.slice(startIndex, endIndex);
-            
-            // 生成分页控件HTML
-            const paginationHTML = createPaginationHTML(tableId, currentPage, totalPages, totalItems);
-            
-            // 生成表格HTML
-            let tableHTML = paginationHTML + '<div class="table-wrapper">';
-            tableHTML += '<table><thead><tr>';
-            
-            if (type === 'z-score') {{
-                tableHTML += '<th>数据点</th><th>Z-score值</th><th>异常程度</th><th>比值</th><th>称重AD值</th><th>零点AD值</th><th>重量(kg)</th><th>商品名称</th>';
-            }} else {{
-                tableHTML += '<th>数据点</th><th>比值</th><th>异常状态</th><th>称重AD值</th><th>零点AD值</th><th>重量(kg)</th><th>商品名称</th>';
-            }}
-            
-            tableHTML += '</tr></thead><tbody>';
-            
-            currentPageAnomalies.forEach(anomaly => {{
-                const severityClass = type === 'z-score' ? 
-                    (anomaly.anomaly === '轻度异常' ? 'mild' : 'severe') : 'outlier';
-                
-                tableHTML += '<tr>';
-                tableHTML += `<td>${{anomaly.index}}</td>`;
-                
-                if (type === 'z-score') {{
-                    tableHTML += `<td>${{anomaly.z_score.toFixed(4)}}</td>`;
-                    tableHTML += `<td><span class="anomaly-severity ${{severityClass}}">${{anomaly.anomaly}}</span></td>`;
-                    tableHTML += `<td>${{anomaly.ratio.toFixed(4)}}</td>`;
-                }} else {{
-                    tableHTML += `<td>${{anomaly.ratio.toFixed(4)}}</td>`;
-                    tableHTML += `<td><span class="anomaly-severity ${{severityClass}}">${{anomaly.anomaly}}</span></td>`;
-                }}
-                
-                tableHTML += `<td>${{anomaly.ad_value || '-'}}</td>`;
-                tableHTML += `<td>${{anomaly.zero_ad_value || '-'}}</td>`;
-                tableHTML += `<td>${{anomaly.weight || '-'}}</td>`;
-                tableHTML += `<td>${{anomaly.product_name || '-'}}</td>`;
-                tableHTML += '</tr>';
-            }});
-            
-            tableHTML += '</tbody></table></div>' + paginationHTML;
-            tableContainer.innerHTML = tableHTML;
-        }}
+
         
-        // 渲染对比分析表格
-        function renderComparisonTable() {{
-            const tableContainer = document.getElementById('comparison-table');
-            if (!anomalyData) {{
-                tableContainer.innerHTML = '<div class="table-title">暂无对比数据</div>';
-                return;
-            }}
-            
-            const comparison = anomalyData.summary.comparison;
-            const zOnlyIndices = comparison.z_only_indices || [];
-            const iqrOnlyIndices = comparison.iqr_only_indices || [];
-            const commonIndices = comparison.common_indices || [];
-            
-            let tableHTML = '<div class="table-wrapper">';
-            tableHTML += '<table><thead><tr><th>异常类型</th><th>数量</th><th>数据点索引</th></tr></thead><tbody>';
-            
-            tableHTML += `<tr><td>Z-score独有异常</td><td>${{zOnlyIndices.length}}</td><td>${{zOnlyIndices.join(', ') || '无'}}</td></tr>`;
-            tableHTML += `<tr><td>IQR独有异常</td><td>${{iqrOnlyIndices.length}}</td><td>${{iqrOnlyIndices.join(', ') || '无'}}</td></tr>`;
-            tableHTML += `<tr><td>两种方法共同异常</td><td>${{commonIndices.length}}</td><td>${{commonIndices.join(', ') || '无'}}</td></tr>`;
-            
-            tableHTML += '</tbody></table></div>';
-            tableContainer.innerHTML = tableHTML;
-        }}
+
         
         // 渲染异常分析概览
         function renderAnomalySummary() {{
@@ -1340,39 +1262,36 @@ class WebVisualizationGenerator:
             const summary = anomalyData.summary;
             document.getElementById('total-records').textContent = summary.total_records.toLocaleString();
             document.getElementById('z-anomaly-rate').textContent = summary.z_score_stats.anomaly_rate.toFixed(2) + '%';
-            document.getElementById('iqr-anomaly-rate').textContent = summary.iqr_stats.anomaly_rate.toFixed(2) + '%';
-            document.getElementById('common-anomalies').textContent = summary.comparison.common_count;
+            document.getElementById('mild-anomalies').textContent = summary.z_score_stats.mild_anomaly_count.toLocaleString();
+            document.getElementById('severe-anomalies').textContent = summary.z_score_stats.severe_anomaly_count.toLocaleString();
         }}
         
         // 渲染异常分析图表
         function renderAnomalyCharts() {{
             if (!anomalyData) return;
             
-            renderAnomalyComparisonChart();
             renderZScoreDistributionChart();
         }}
         
-        // 渲染异常检测方法对比图表
-        function renderAnomalyComparisonChart() {{
-            const ctx = document.getElementById('anomalyComparisonChart').getContext('2d');
+        // 渲染Z-score分布图表
+        function renderZScoreDistributionChart() {{
+            const ctx = document.getElementById('zScoreDistributionChart').getContext('2d');
             const summary = anomalyData.summary;
             
             new Chart(ctx, {{
                 type: 'doughnut',
                 data: {{
-                    labels: ['正常数据', 'Z-score异常', 'IQR异常', '共同异常'],
+                    labels: ['正常数据', '轻度异常', '重度异常'],
                     datasets: [{{
                         data: [
                             summary.z_score_stats.normal_count,
-                            summary.z_score_stats.mild_anomaly_count + summary.z_score_stats.severe_anomaly_count,
-                            summary.iqr_stats.outlier_count,
-                            summary.comparison.common_count
+                            summary.z_score_stats.mild_anomaly_count,
+                            summary.z_score_stats.severe_anomaly_count
                         ],
                         backgroundColor: [
                             '#28a745',
                             '#ffc107',
-                            '#dc3545',
-                            '#6f42c1'
+                            '#dc3545'
                         ],
                         borderWidth: 2,
                         borderColor: '#fff'
@@ -1384,7 +1303,7 @@ class WebVisualizationGenerator:
                     plugins: {{
                         title: {{
                             display: true,
-                            text: '异常检测方法对比分布'
+                            text: 'Z-score异常程度分布'
                         }},
                         legend: {{
                             position: 'bottom'
@@ -1394,73 +1313,7 @@ class WebVisualizationGenerator:
             }});
         }}
         
-        // 渲染Z-score分布图表
-        function renderZScoreDistributionChart() {{
-            const ctx = document.getElementById('zScoreDistributionChart').getContext('2d');
-            const zAnomalies = anomalyData.z_score_anomalies || [];
-            
-            // 按异常程度分组
-            const mildAnomalies = zAnomalies.filter(a => a.anomaly === '轻度异常');
-            const severeAnomalies = zAnomalies.filter(a => a.anomaly === '重度异常');
-            
-            new Chart(ctx, {{
-                type: 'bar',
-                data: {{
-                    labels: ['轻度异常', '重度异常'],
-                    datasets: [{{
-                        label: '异常数量',
-                        data: [mildAnomalies.length, severeAnomalies.length],
-                        backgroundColor: ['#ffc107', '#dc3545'],
-                        borderColor: ['#e0a800', '#c82333'],
-                        borderWidth: 1
-                    }}]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {{
-                        y: {{
-                            beginAtZero: true,
-                            title: {{
-                                display: true,
-                                text: '异常数量'
-                            }}
-                        }},
-                        x: {{
-                            title: {{
-                                display: true,
-                                text: '异常程度'
-                            }}
-                        }}
-                    }},
-                    plugins: {{
-                        title: {{
-                            display: true,
-                            text: 'Z-score异常程度分布'
-                        }}
-                    }}
-                }}
-            }});
-        }}
-        
-        // 动态加载异常数据
-        async function loadAnomalyData() {{
-            try {{
-                const response = await fetch('anomaly_data.json');
-                if (response.ok) {{
-                    anomalyData = await response.json();
-                    console.log('异常数据加载成功:', anomalyData);
-                    
-                    // 初始化异常分析
-                    renderAnomalySummary();
-                    renderAnomalyCharts();
-                }} else {{
-                    console.log('没有找到异常数据文件');
-                }}
-            }} catch (error) {{
-                console.log('加载异常数据失败:', error);
-            }}
-        }}
+
         
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {{
@@ -1469,8 +1322,11 @@ class WebVisualizationGenerator:
             renderWeeklyCompareCountChart();
             renderWeeklyCompareMeanChart();
             
-            // 动态加载异常数据
-            loadAnomalyData();
+            // 初始化异常分析（数据已嵌入页面）
+            if (anomalyData) {{
+                renderAnomalySummary();
+                renderAnomalyCharts();
+            }}
         }});
     </script>
 </body>
@@ -1496,8 +1352,12 @@ class WebVisualizationGenerator:
                 print("错误: 无法获取统计数据")
                 return None
             
+            # 获取异常分析数据
+            print("正在分析异常数据...")
+            anomaly_data = csv_processor.single_scale_example_usage()
+            
             # 生成HTML页面
-            html_file_path = self.generate_html_page(statistics_data)
+            html_file_path = self.generate_html_page(statistics_data, anomaly_data)
             
             print(f"可视化网页已生成: {html_file_path}")
             

@@ -447,7 +447,7 @@ def analyze_weight_data(file_path, ad_column='称重AD值', zero_ad_column='零�
 单台秤的称重失准异常分析
 """
 def single_scale_example_usage():
-    """示例用法"""
+    """示例用法，返回异常分析结果"""
     # 获取当前目录
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -459,20 +459,12 @@ def single_scale_example_usage():
     # 检查文件是否存在
     if not os.path.exists(test_file):
         print(f"错误: 找不到测试数据文件 '{test_file}'")
-        return
+        return None
     
     if not os.path.exists(device_file):
         print(f"错误: 找不到设备数据文件 '{device_file}'")
-        return
+        return None
 
-    # # 对比值进行描述性分析
-    # print("\n测试数据比值的描述性分析:")
-    # analyze_weight_data(test_file)
-    #
-    # print("\n设备数据比值的描述性分析:")
-    # analyze_weight_data(device_file)
-
-    
     # 分析文件并获取比值和完整数据
     print("正在分析测试数据文件...")
     test_ratios, test_data = analyze_file_and_get_ratios(test_file)
@@ -483,14 +475,29 @@ def single_scale_example_usage():
     # 检查是否有足够的有效比值
     if not test_ratios:
         print("错误: 测试数据中没有有效比值")
-        return
+        return None
     
     if len(device_ratios) < 2:
         print("错误: 设备数据中有效比值不足")
-        return
+        return None
 
     # 计算Z-score并传递原始测试数据
     z_score_results = calculate_z_scores(test_ratios, device_ratios, test_data)
+    
+    # 准备返回的异常分析结果
+    anomaly_result = {
+        'total_records': len(test_ratios),
+        'z_score_anomalies': [],
+        'summary': {
+            'total_records': len(test_ratios),
+            'z_score_stats': {
+                'normal_count': 0,
+                'mild_anomaly_count': 0,
+                'severe_anomaly_count': 0,
+                'anomaly_rate': 0.0
+            }
+        }
+    }
     
     if z_score_results:
         print("\nZ-score计算结果:")
@@ -503,10 +510,42 @@ def single_scale_example_usage():
         for i, result in enumerate(z_score_results):
             z = result['z_score']
             anomaly = result['anomaly']
-            # print(f"{i+1:<10}{z:<15.4f}{anomaly:<15}")
+            
+            # 统计异常情况
+            if anomaly == "正常":
+                anomaly_result['summary']['z_score_stats']['normal_count'] += 1
+            elif anomaly == "轻度异常":
+                anomaly_result['summary']['z_score_stats']['mild_anomaly_count'] += 1
+            elif anomaly == "重度异常":
+                anomaly_result['summary']['z_score_stats']['severe_anomaly_count'] += 1
+            
             # 收集异常数据
             if anomaly != "正常":
                 z_anomalies.append((i+1, result))
+                
+                # 准备用于网页显示的异常数据
+                anomaly_data = {
+                    'index': i+1,
+                    'z_score': round(z, 2),
+                    'anomaly': anomaly,
+                    'ratio': round(result['ratio'], 2)
+                }
+                
+                # 添加原始数据
+                if 'original_data' in result:
+                    original_data = result['original_data']
+                    anomaly_data.update({
+                        'ad_value': original_data.get('称重AD值', '-'),
+                        'zero_ad_value': original_data.get('零点AD值', '-'),
+                        'weight': original_data.get('重量(kg)', '-'),
+                        'product_name': original_data.get('商品名称', '-')
+                    })
+                
+                anomaly_result['z_score_anomalies'].append(anomaly_data)
+        
+        # 计算异常率
+        total_anomalies = anomaly_result['summary']['z_score_stats']['mild_anomaly_count'] + anomaly_result['summary']['z_score_stats']['severe_anomaly_count']
+        anomaly_result['summary']['z_score_stats']['anomaly_rate'] = (total_anomalies / len(test_ratios)) * 100 if len(test_ratios) > 0 else 0
         
         # 输出Z-score异常数据行
         if z_anomalies:
@@ -534,85 +573,7 @@ def single_scale_example_usage():
                     row_values = [idx] + [row_data.get(col, "-") for col in columns]
                     print("\t".join(map(str, row_values)))
 
-    # 使用四分位法检测测试数据中的异常值并传递原始测试数据
-    outlier_results = detect_outliers_with_iqr(device_ratios, test_ratios, test_data)
-    
-    if outlier_results:
-        print("\nIQR异常值检测结果:")
-        print("=" * 80)
-        print(f"{'数据点':<10}{'比值':<15}{'状态':<30}")
-        print("=" * 80)
-        
-        # 收集IQR异常数据
-        iqr_anomalies = []
-        for i, result in enumerate(outlier_results):
-            ratio = result['ratio']
-            anomaly = result['anomaly']
-            # print(f"{i+1:<10}{ratio:<15.4f}{anomaly:<30}")
-            # 收集异常数据
-            if 'is_outlier' in result and result['is_outlier']:
-                iqr_anomalies.append((i+1, result))
-            elif '异常' in anomaly:
-                iqr_anomalies.append((i+1, result))
-        
-        # 输出IQR异常数据行
-        if iqr_anomalies:
-            print("\nIQR异常数据行:")
-            print("=" * 120)
-            # 获取所有可能的列名
-            all_columns = set()
-            for _, result in iqr_anomalies:
-                if 'original_data' in result:
-                    all_columns.update(result['original_data'].keys())
-            
-            # 确保关键列在前
-            key_columns = ['称重AD值', '零点AD值', '重量(kg)']
-            columns = key_columns + [col for col in all_columns if col not in key_columns]
-            
-            # 打印表头
-            header = "数据点" + "	" + "\t".join(columns)
-            print(header)
-            print("=" * 120)
-            
-            # 打印异常数据行
-            for idx, result in iqr_anomalies:
-                if 'original_data' in result:
-                    row_data = result['original_data']
-                    row_values = [idx] + [row_data.get(col, "-") for col in columns]
-                    print("\t".join(map(str, row_values)))
-            
-        # 对比两种方法检测到的异常数据行坐标
-        if 'z_anomalies' in locals() and 'iqr_anomalies' in locals():
-            z_anomaly_indices = set([idx for idx, _ in z_anomalies])
-            iqr_anomaly_indices = set([idx for idx, _ in iqr_anomalies])
-            
-            print("\n两种方法检测异常数据行坐标对比:")
-            print("=" * 100)
-            print(f"{'比较类型':<20}{'行坐标'}")
-            print("=" * 100)
-            
-            # 只在Z-score中检测到的异常
-            z_only = z_anomaly_indices - iqr_anomaly_indices
-            if z_only:
-                print(f"{'Z-score独有异常':<20}{', '.join(map(str, sorted(z_only)))}")
-            else:
-                print(f"{'Z-score独有异常':<20}无")
-            
-            # 只在IQR中检测到的异常
-            iqr_only = iqr_anomaly_indices - z_anomaly_indices
-            if iqr_only:
-                print(f"{'IQR独有异常':<20}{', '.join(map(str, sorted(iqr_only)))}")
-            else:
-                print(f"{'IQR独有异常':<20}无")
-            
-            # 两种方法都检测到的异常
-            common = z_anomaly_indices & iqr_anomaly_indices
-            if common:
-                print(f"{'两种方法共异常':<20}{', '.join(map(str, sorted(common)))}")
-            else:
-                print(f"{'两种方法共异常':<20}无")
-            
-            print("=" * 100)
+    return anomaly_result
 
 
 """
