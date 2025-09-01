@@ -190,7 +190,7 @@ class CSVProcessor:
             raise FileNotFoundError(f"文件不存在: {file_path}")
 
         data = []
-        with open(file_path, 'r', encoding='utf-8') as file:
+        with open(file_path, 'r', encoding='utf-8-sig') as file:  # 使用utf-8-sig自动处理BOM
             reader = csv.DictReader(file)
             for row in reader:
                 data.append(row)
@@ -452,8 +452,9 @@ def single_scale_example_usage():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # 定义文件路径
-    test_file = os.path.join(current_dir, '设备3PLBJ0700_称重数据_2025-01-01_2025-08-25.csv')
-    device_file = os.path.join(current_dir, '设备3PLBJ0700_称重数据_2025-01-01_2025-08-25.csv')
+    # 设备L30DG0071_称重数据_20000条.csv 设备L30DG0091_称重数据_2025-05-31_2025-08-28.csv
+    test_file = os.path.join(current_dir, '设备L30DG0071_称重数据_20000条.csv')
+    device_file = os.path.join(current_dir, '设备L30DG0071_称重数据_20000条.csv')
     
     # 检查文件是否存在
     if not os.path.exists(test_file):
@@ -623,7 +624,8 @@ def time_based_weight_statistics():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # 定义文件路径
-    data_file = os.path.join(current_dir, '设备L30DG0091_称重数据_2025-05-31_2025-08-28.csv')
+    # 设备L30DG0091_称重数据_2025-05-31_2025-08-28.csv 
+    data_file = os.path.join(current_dir, '设备L30DG0071_称重数据_20000条.csv')
     
     # 检查文件是否存在
     if not os.path.exists(data_file):
@@ -1121,7 +1123,6 @@ def time_based_weight_statistics():
         
     # except Exception as e:
     #     print(f"保存CSV文件时出错: {e}")
-    
     return {
         'daily': daily_results,
         'weekly': weekly_results,
@@ -1131,8 +1132,8 @@ def time_based_weight_statistics():
 
 
 if __name__ == '__main__':
-    # # 1、单台秤的称重失准异常分析
-    # single_scale_example_usage()
+    # 1、单台秤的称重失准异常分析
+    single_scale_example_usage()
     
     # 2、按时间分组的称重统计
     print("\n" + "="*100)

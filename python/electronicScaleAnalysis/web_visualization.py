@@ -217,7 +217,160 @@ class WebVisualizationGenerator:
             font-weight: bold;
         }}
         
+        /* 分页样式 */
+        .pagination-container {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            gap: 10px;
+        }}
         
+        .pagination-info {{
+            color: #666;
+            font-size: 0.9em;
+            margin: 0 15px;
+        }}
+        
+        .pagination-btn {{
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }}
+        
+        .pagination-btn:hover:not(:disabled) {{
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }}
+        
+        .pagination-btn:disabled {{
+            background: #f5f5f5;
+            color: #ccc;
+            cursor: not-allowed;
+            border-color: #e0e0e0;
+        }}
+        
+        .pagination-btn.active {{
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }}
+        
+        .pagination-input {{
+            width: 60px;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.9em;
+        }}
+        
+        .pagination-input:focus {{
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }}
+        
+        .table-wrapper {{
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }}
+        
+        .table-controls {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        
+        .page-size-selector {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .page-size-selector select {{
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            font-size: 0.9em;
+        }}
+        
+        .page-size-selector select:focus {{
+            outline: none;
+            border-color: #667eea;
+        }}
+        
+        /* 异常分析样式 */
+        .anomaly-tab-content {{
+            display: none;
+        }}
+        
+        .anomaly-tab-content.active {{
+            display: block;
+        }}
+        
+        .anomaly-severity {{
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }}
+        
+        .anomaly-severity.normal {{
+            background-color: #d4edda;
+            color: #155724;
+        }}
+        
+        .anomaly-severity.mild {{
+            background-color: #fff3cd;
+            color: #856404;
+        }}
+        
+        .anomaly-severity.severe {{
+            background-color: #f8d7da;
+            color: #721c24;
+        }}
+        
+        .anomaly-severity.outlier {{
+            background-color: #f8d7da;
+            color: #721c24;
+        }}
+        
+        .comparison-stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }}
+        
+        .comparison-card {{
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            color: #333;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }}
+        
+        .comparison-card h4 {{
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }}
+        
+        .comparison-value {{
+            font-size: 1.8em;
+            font-weight: bold;
+        }}
         
         @media (max-width: 768px) {{
             .stats-grid {{
@@ -264,13 +417,7 @@ class WebVisualizationGenerator:
                 </div>
             </div>
             
-            <!-- 图表展示区域 -->
-            <div class="chart-container">
-                <div class="chart-title">📊 数据趋势图表</div>
-                <div class="chart-wrapper">
-                    <canvas id="trendChart"></canvas>
-                </div>
-            </div>
+
             
             
             
@@ -281,6 +428,7 @@ class WebVisualizationGenerator:
                     <button class="nav-tab" onclick="showTab('weekly')">📆 每周统计</button>
                     <button class="nav-tab" onclick="showTab('monthly')">🗓️ 每月统计</button>
                     <button class="nav-tab" onclick="showTab('weeklyCompare')">⚖️ 周内 vs 周末</button>
+                    <button class="nav-tab" onclick="showTab('anomaly')">🚨 异常分析</button>
                 </div>
                 
                 <div id="daily" class="tab-content active">
@@ -309,10 +457,80 @@ class WebVisualizationGenerator:
                 
                 <div id="weeklyCompare" class="tab-content">
                     <div class="table-title">每周 周内(工作日) 与 周末 对比</div>
-                    <div class="chart-wrapper">
-                        <canvas id="weeklyCompareChart"></canvas>
+                    <div class="chart-container">
+                        <div class="chart-title">📊 周内 vs 周末 称重次数对比</div>
+                        <div class="chart-wrapper">
+                            <canvas id="weeklyCompareCountChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">⚖️ 周内 vs 周末 重量均值对比</div>
+                        <div class="chart-wrapper">
+                            <canvas id="weeklyCompareMeanChart"></canvas>
+                        </div>
                     </div>
                     <div id="weekly-compare-table"></div>
+                </div>
+                
+                <div id="anomaly" class="tab-content">
+                    <div class="table-title">🚨 称重数据异常分析</div>
+                    
+                    <!-- 异常分析概览 -->
+                    <div class="summary-stats" id="anomaly-summary">
+                        <div class="summary-card">
+                            <h4>总记录数</h4>
+                            <div class="summary-value" id="total-records">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <h4>Z-score异常率</h4>
+                            <div class="summary-value" id="z-anomaly-rate">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <h4>IQR异常率</h4>
+                            <div class="summary-value" id="iqr-anomaly-rate">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <h4>共同异常数</h4>
+                            <div class="summary-value" id="common-anomalies">-</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 异常分析图表 -->
+                    <div class="chart-container">
+                        <div class="chart-title">📊 异常检测方法对比</div>
+                        <div class="chart-wrapper">
+                            <canvas id="anomalyComparisonChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div class="chart-title">📈 Z-score异常分布</div>
+                        <div class="chart-wrapper">
+                            <canvas id="zScoreDistributionChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 异常数据表格 -->
+                    <div class="nav-tabs">
+                        <button class="nav-tab active" onclick="showAnomalyTab('z-score')">Z-score异常</button>
+                        <button class="nav-tab" onclick="showAnomalyTab('iqr')">IQR异常</button>
+                        <button class="nav-tab" onclick="showAnomalyTab('comparison')">方法对比</button>
+                    </div>
+                    
+                    <div id="z-score-anomalies" class="anomaly-tab-content active">
+                        <div class="table-title">Z-score异常数据详情</div>
+                        <div id="z-score-table"></div>
+                    </div>
+                    
+                    <div id="iqr-anomalies" class="anomaly-tab-content">
+                        <div class="table-title">IQR异常数据详情</div>
+                        <div id="iqr-table"></div>
+                    </div>
+                    
+                    <div id="comparison-anomalies" class="anomaly-tab-content">
+                        <div class="table-title">异常检测方法对比分析</div>
+                        <div id="comparison-table"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -321,6 +539,128 @@ class WebVisualizationGenerator:
     <script>
         // 数据变量
         let statisticsData = {json.dumps(statistics_data, ensure_ascii=False, default=str)};
+        let anomalyData = null;
+        
+        // 分页配置
+        const paginationConfig = {{
+            pageSize: 20,
+            maxVisiblePages: 5
+        }};
+        
+        // 分页状态
+        const paginationState = {{
+            daily: {{ currentPage: 1, totalPages: 1 }},
+            weekly: {{ currentPage: 1, totalPages: 1 }},
+            monthly: {{ currentPage: 1, totalPages: 1 }},
+            weeklyCompare: {{ currentPage: 1, totalPages: 1 }},
+            zScore: {{ currentPage: 1, totalPages: 1 }},
+            iqr: {{ currentPage: 1, totalPages: 1 }}
+        }};
+        
+        // 分页工具函数
+        function createPaginationHTML(tableId, currentPage, totalPages, totalItems) {{
+            const startItem = (currentPage - 1) * paginationConfig.pageSize + 1;
+            const endItem = Math.min(currentPage * paginationConfig.pageSize, totalItems);
+            
+            let paginationHTML = `
+                <div class="table-controls">
+                    <div class="page-size-selector">
+                        <label>每页显示:</label>
+                        <select onchange="changePageSize('${{tableId}}', this.value)">
+                            <option value="10" ${{paginationConfig.pageSize === 10 ? 'selected' : ''}}>10</option>
+                            <option value="20" ${{paginationConfig.pageSize === 20 ? 'selected' : ''}}>20</option>
+                            <option value="50" ${{paginationConfig.pageSize === 50 ? 'selected' : ''}}>50</option>
+                            <option value="100" ${{paginationConfig.pageSize === 100 ? 'selected' : ''}}>100</option>
+                        </select>
+                    </div>
+                    <div class="pagination-info">
+                        显示 ${{startItem}} - ${{endItem}} 条，共 ${{totalItems}} 条记录
+                    </div>
+                </div>
+            `;
+            
+            if (totalPages > 1) {{
+                paginationHTML += `
+                    <div class="pagination-container">
+                        <button class="pagination-btn" onclick="goToPage('${{tableId}}', 1)" ${{currentPage === 1 ? 'disabled' : ''}}>
+                            首页
+                        </button>
+                        <button class="pagination-btn" onclick="goToPage('${{tableId}}', ${{currentPage - 1}})" ${{currentPage === 1 ? 'disabled' : ''}}>
+                            上一页
+                        </button>
+                `;
+                
+                // 计算显示的页码范围
+                let startPage = Math.max(1, currentPage - Math.floor(paginationConfig.maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + paginationConfig.maxVisiblePages - 1);
+                
+                if (endPage - startPage + 1 < paginationConfig.maxVisiblePages) {{
+                    startPage = Math.max(1, endPage - paginationConfig.maxVisiblePages + 1);
+                }}
+                
+                // 显示页码
+                for (let i = startPage; i <= endPage; i++) {{
+                    paginationHTML += `
+                        <button class="pagination-btn ${{i === currentPage ? 'active' : ''}}" 
+                                onclick="goToPage('${{tableId}}', ${{i}})">
+                            ${{i}}
+                        </button>
+                    `;
+                }}
+                
+                paginationHTML += `
+                        <button class="pagination-btn" onclick="goToPage('${{tableId}}', ${{currentPage + 1}})" ${{currentPage === totalPages ? 'disabled' : ''}}>
+                            下一页
+                        </button>
+                        <button class="pagination-btn" onclick="goToPage('${{tableId}}', ${{totalPages}})" ${{currentPage === totalPages ? 'disabled' : ''}}>
+                            末页
+                        </button>
+                        <div class="pagination-info">
+                            跳转到 <input type="number" class="pagination-input" min="1" max="${{totalPages}}" 
+                                         value="${{currentPage}}" onchange="goToPage('${{tableId}}', parseInt(this.value))"> 页
+                        </div>
+                    </div>
+                `;
+            }}
+            
+            return paginationHTML;
+        }}
+        
+        // 分页控制函数
+        function goToPage(tableId, page) {{
+            const type = tableId.replace('-table', '');
+            if (type === 'weekly-compare') {{
+                paginationState.weeklyCompare.currentPage = Math.max(1, Math.min(page, paginationState.weeklyCompare.totalPages));
+                renderTableWithPagination(tableId, statisticsData.weekly_weekday_weekend || {{}}, 'weekly_weekday_weekend');
+            }} else if (type === 'z-score') {{
+                paginationState.zScore.currentPage = Math.max(1, Math.min(page, paginationState.zScore.totalPages));
+                renderAnomalyTableWithPagination(tableId, anomalyData?.z_score_anomalies || [], 'z-score');
+            }} else if (type === 'iqr') {{
+                paginationState.iqr.currentPage = Math.max(1, Math.min(page, paginationState.iqr.totalPages));
+                renderAnomalyTableWithPagination(tableId, anomalyData?.iqr_anomalies || [], 'iqr');
+            }} else {{
+                paginationState[type].currentPage = Math.max(1, Math.min(page, paginationState[type].totalPages));
+                renderTableWithPagination(tableId, statisticsData[type] || {{}}, type);
+            }}
+        }}
+        
+        function changePageSize(tableId, newSize) {{
+            paginationConfig.pageSize = parseInt(newSize);
+            const type = tableId.replace('-table', '');
+            if (type === 'weekly-compare') {{
+                paginationState.weeklyCompare.currentPage = 1;
+                renderTableWithPagination(tableId, statisticsData.weekly_weekday_weekend || {{}}, 'weekly_weekday_weekend');
+            }} else if (type === 'z-score') {{
+                paginationState.zScore.currentPage = 1;
+                renderAnomalyTableWithPagination(tableId, anomalyData?.z_score_anomalies || [], 'z-score');
+            }} else if (type === 'iqr') {{
+                paginationState.iqr.currentPage = 1;
+                renderAnomalyTableWithPagination(tableId, anomalyData?.iqr_anomalies || [], 'iqr');
+            }} else {{
+                paginationState[type].currentPage = 1;
+                renderTableWithPagination(tableId, statisticsData[type] || {{}}, type);
+            }}
+        }}
         
         // 显示指定标签页
         function showTab(tabName) {{
@@ -344,15 +684,28 @@ class WebVisualizationGenerator:
             }} else if (tabName === 'monthly') {{
                 renderMonthlyChart();
             }} else if (tabName === 'weeklyCompare') {{
-                renderWeeklyCompareChart();
+                renderWeeklyCompareCountChart();
+                renderWeeklyCompareMeanChart();
+                renderWeeklyCompareTable();
+            }} else if (tabName === 'anomaly') {{
+                if (anomalyData) {{
+                    renderAnomalyCharts();
+                    renderAnomalySummary();
+                    renderAnomalyTableWithPagination('z-score-table', anomalyData?.z_score_anomalies || [], 'z-score');
+                }} else {{
+                    // 如果异常数据还未加载，显示加载提示
+                    document.getElementById('anomaly-summary').innerHTML = '<div class="table-title">正在加载异常数据...</div>';
+                }}
             }}
         }}
         
-        // 渲染总体趋势图表
-        function renderTrendChart() {{
-            const ctx = document.getElementById('trendChart').getContext('2d');
-            
-            // 准备数据
+
+        
+
+        
+        // 渲染每日统计图表
+        function renderDailyChart() {{
+            const ctx = document.getElementById('dailyChart').getContext('2d');
             const dailyData = statisticsData.daily || {{}};
             const dates = Object.keys(dailyData).sort();
             const counts = dates.map(date => dailyData[date].count);
@@ -394,6 +747,10 @@ class WebVisualizationGenerator:
                             title: {{
                                 display: true,
                                 text: '日期'
+                            }},
+                            ticks: {{
+                                maxRotation: 45,
+                                minRotation: 0
                             }}
                         }},
                         y: {{
@@ -426,67 +783,6 @@ class WebVisualizationGenerator:
                     }}
                 }}
             }});
-        }}
-        
-
-        
-        // 渲染每日统计图表
-        function renderDailyChart() {{
-            const ctx = document.getElementById('dailyChart').getContext('2d');
-            const dailyData = statisticsData.daily || {{}};
-            const dates = Object.keys(dailyData).sort();
-            const stdDevs = dates.map(date => dailyData[date].std_dev);
-            
-            new Chart(ctx, {{
-                type: 'bar',
-                data: {{
-                    labels: dates,
-                    datasets: [{{
-                        label: '重量标准差',
-                        data: stdDevs,
-                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }}]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {{
-                        x: {{
-                            display: true,
-                            title: {{
-                                display: true,
-                                text: '日期'
-                            }},
-                            ticks: {{
-                                maxRotation: 45,
-                                minRotation: 0
-                            }}
-                        }},
-                        y: {{
-                            beginAtZero: true,
-                            title: {{
-                                display: true,
-                                text: '重量标准差(kg)'
-                            }},
-                            ticks: {{
-                                stepSize: 0.1,
-                                maxTicksLimit: 10
-                            }},
-                            grid: {{
-                                color: 'rgba(0,0,0,0.1)'
-                            }}
-                        }}
-                    }},
-                    plugins: {{
-                        title: {{
-                            display: true,
-                            text: '每日重量标准差分布'
-                        }}
-                    }}
-                }}
-            }});
             
             // 渲染表格
             renderTable('daily-table', dailyData, 'daily');
@@ -498,22 +794,38 @@ class WebVisualizationGenerator:
             const weeklyData = statisticsData.weekly || {{}};
             const weeks = Object.keys(weeklyData).sort();
             const counts = weeks.map(week => weeklyData[week].count);
+            const means = weeks.map(week => weeklyData[week].mean);
             
             new Chart(ctx, {{
-                type: 'bar',
+                type: 'line',
                 data: {{
                     labels: weeks,
-                    datasets: [{{
-                        label: '称重次数',
-                        data: counts,
-                        backgroundColor: 'rgba(255, 99, 132, 0.6)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        borderWidth: 1
-                    }}]
+                    datasets: [
+                        {{
+                            label: '称重次数',
+                            data: counts,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.4
+                        }},
+                        {{
+                            label: '重量均值(kg)',
+                            data: means,
+                            borderColor: '#f093fb',
+                            backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                            yAxisID: 'y1',
+                            tension: 0.4
+                        }}
+                    ]
                 }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false,
+                    }},
                     scales: {{
                         x: {{
                             display: true,
@@ -527,24 +839,31 @@ class WebVisualizationGenerator:
                             }}
                         }},
                         y: {{
-                            beginAtZero: true,
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
                             title: {{
                                 display: true,
                                 text: '称重次数'
-                            }},
-                            ticks: {{
-                                stepSize: 500,
-                                maxTicksLimit: 10
+                            }}
+                        }},
+                        y1: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {{
+                                display: true,
+                                text: '重量均值(kg)'
                             }},
                             grid: {{
-                                color: 'rgba(0,0,0,0.1)'
-                            }}
+                                drawOnChartArea: false,
+                            }},
                         }}
                     }},
                     plugins: {{
                         title: {{
                             display: true,
-                            text: '每周称重次数分布'
+                            text: '每周称重次数与重量均值趋势'
                         }}
                     }}
                 }}
@@ -559,24 +878,39 @@ class WebVisualizationGenerator:
             const ctx = document.getElementById('monthlyChart').getContext('2d');
             const monthlyData = statisticsData.monthly || {{}};
             const months = Object.keys(monthlyData).sort();
+            const counts = months.map(month => monthlyData[month].count);
             const means = months.map(month => monthlyData[month].mean);
             
             new Chart(ctx, {{
                 type: 'line',
                 data: {{
                     labels: months,
-                    datasets: [{{
-                        label: '重量均值',
-                        data: means,
-                        borderColor: '#4facfe',
-                        backgroundColor: 'rgba(79, 172, 254, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }}]
+                    datasets: [
+                        {{
+                            label: '称重次数',
+                            data: counts,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.4
+                        }},
+                        {{
+                            label: '重量均值(kg)',
+                            data: means,
+                            borderColor: '#f093fb',
+                            backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                            yAxisID: 'y1',
+                            tension: 0.4
+                        }}
+                    ]
                 }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false,
+                    }},
                     scales: {{
                         x: {{
                             display: true,
@@ -590,16 +924,31 @@ class WebVisualizationGenerator:
                             }}
                         }},
                         y: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {{
+                                display: true,
+                                text: '称重次数'
+                            }}
+                        }},
+                        y1: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
                             title: {{
                                 display: true,
                                 text: '重量均值(kg)'
-                            }}
+                            }},
+                            grid: {{
+                                drawOnChartArea: false,
+                            }},
                         }}
                     }},
                     plugins: {{
                         title: {{
                             display: true,
-                            text: '每月重量均值趋势'
+                            text: '每月称重次数与重量均值趋势'
                         }}
                     }}
                 }}
@@ -609,9 +958,9 @@ class WebVisualizationGenerator:
             renderTable('monthly-table', monthlyData, 'monthly');
         }}
         
-        // 渲染周内 vs 周末 对比图表
-        function renderWeeklyCompareChart() {{
-            const ctx = document.getElementById('weeklyCompareChart').getContext('2d');
+        // 渲染周内 vs 周末 称重次数对比图表
+        function renderWeeklyCompareCountChart() {{
+            const ctx = document.getElementById('weeklyCompareCountChart').getContext('2d');
             const raw = statisticsData.weekly_weekday_weekend || {{}};
             
             // 聚合成每周的 weekday / weekend 两列
@@ -639,14 +988,14 @@ class WebVisualizationGenerator:
                         {{
                             label: '周内称重次数',
                             data: weekdayCounts,
-                            backgroundColor: 'rgba(102, 126, 234, 0.7)',
+                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
                             borderColor: '#667eea',
                             borderWidth: 1
                         }},
                         {{
                             label: '周末称重次数',
                             data: weekendCounts,
-                            backgroundColor: 'rgba(240, 147, 251, 0.7)',
+                            backgroundColor: 'rgba(240, 147, 251, 0.8)',
                             borderColor: '#f093fb',
                             borderWidth: 1
                         }}
@@ -655,8 +1004,13 @@ class WebVisualizationGenerator:
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false,
+                    }},
                     scales: {{
                         x: {{
+                            display: true,
                             title: {{ display: true, text: '周次' }}
                         }},
                         y: {{
@@ -669,27 +1023,122 @@ class WebVisualizationGenerator:
                     }}
                 }}
             }});
+        }}
+        
+        // 渲染周内 vs 周末 重量均值对比图表
+        function renderWeeklyCompareMeanChart() {{
+            const ctx = document.getElementById('weeklyCompareMeanChart').getContext('2d');
+            const raw = statisticsData.weekly_weekday_weekend || {{}};
+            
+            // 聚合成每周的 weekday / weekend 两列
+            const weekToParts = {{}};
+            Object.keys(raw).forEach(key => {{
+                const week = key.replace(/_(weekday|weekend)$/,'');
+                if (!weekToParts[week]) {{
+                    weekToParts[week] = {{ weekday: null, weekend: null }};
+                }}
+                if (key.endsWith('_weekday')) {{
+                    weekToParts[week].weekday = raw[key];
+                }} else if (key.endsWith('_weekend')) {{
+                    weekToParts[week].weekend = raw[key];
+                }}
+            }});
+            const weeks = Object.keys(weekToParts).sort();
+            const weekdayMeans = weeks.map(w => (weekToParts[w].weekday ? weekToParts[w].weekday.mean : 0));
+            const weekendMeans = weeks.map(w => (weekToParts[w].weekend ? weekToParts[w].weekend.mean : 0));
 
-            // 渲染对比表格
+            new Chart(ctx, {{
+                type: 'bar',
+                data: {{
+                    labels: weeks,
+                    datasets: [
+                        {{
+                            label: '周内重量均值(kg)',
+                            data: weekdayMeans,
+                            backgroundColor: 'rgba(79, 172, 254, 0.8)',
+                            borderColor: '#4facfe',
+                            borderWidth: 1
+                        }},
+                        {{
+                            label: '周末重量均值(kg)',
+                            data: weekendMeans,
+                            backgroundColor: 'rgba(0, 242, 254, 0.8)',
+                            borderColor: '#00f2fe',
+                            borderWidth: 1
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false,
+                    }},
+                    scales: {{
+                        x: {{
+                            display: true,
+                            title: {{ display: true, text: '周次' }}
+                        }},
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: '重量均值(kg)' }}
+                        }}
+                    }},
+                    plugins: {{
+                        title: {{ display: true, text: '每周 周内 vs 周末 重量均值对比' }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // 渲染周内 vs 周末 对比表格
+        function renderWeeklyCompareTable() {{
+            const raw = statisticsData.weekly_weekday_weekend || {{}};
             renderTable('weekly-compare-table', raw, 'weekly_weekday_weekend');
         }}
         
-        // 渲染数据表格
-        function renderTable(tableId, data, type) {{
+        // 渲染数据表格（带分页）
+        function renderTableWithPagination(tableId, data, type) {{
             const tableContainer = document.getElementById(tableId);
             const sortedKeys = Object.keys(data).sort();
+            const totalItems = sortedKeys.length;
+            const totalPages = Math.ceil(totalItems / paginationConfig.pageSize);
+            
+            // 更新分页状态
+            const stateType = type === 'weekly_weekday_weekend' ? 'weeklyCompare' : type;
+            paginationState[stateType].totalPages = totalPages;
+            const currentPage = paginationState[stateType].currentPage;
+            
+            // 计算当前页的数据范围
+            const startIndex = (currentPage - 1) * paginationConfig.pageSize;
+            const endIndex = Math.min(startIndex + paginationConfig.pageSize, totalItems);
+            const currentPageKeys = sortedKeys.slice(startIndex, endIndex);
+            
+            // 生成分页控件HTML
+            const paginationHTML = createPaginationHTML(tableId, currentPage, totalPages, totalItems);
+            
+            // 生成表格HTML
+            let tableHTML = paginationHTML + '<div class="table-wrapper">';
             
             if (type === 'weekly_weekday_weekend') {{
-                let tableHTML = '<table><thead><tr>' +
+                tableHTML += '<table><thead><tr>' +
                     '<th>周次</th><th>类型</th>' +
-                    '<th>称重次数</th><th>重量均值(kg)</th><th>重量标准差</th><th>最小重量(kg)</th><th>最大重量(kg)</th>' +
+                    '<th>称重次数</th><th>重量均值(kg)</th><th>重量标准差</th><th>最小重量(kg)</th><th>最大重量(kg)</th><th>Top3商品(次数)</th>' +
                     '</tr></thead><tbody>';
 
-                sortedKeys.forEach(key => {{
+                currentPageKeys.forEach(key => {{
                     const stats = data[key];
                     if (!stats) return;
                     const week = key.replace(/_(weekday|weekend)$/,'');
                     const typeLabel = key.endsWith('_weekday') ? '周内' : (key.endsWith('_weekend') ? '周末' : '-');
+                    
+                    // 处理Top3商品数据
+                    let top3Str = '';
+                    if (stats.top3_products && stats.top3_products.length > 0) {{
+                        top3Str = stats.top3_products.map(item => `${{item[0]}}(${{item[1]}})`).join(', ');
+                    }}
+                    
                     tableHTML += `<tr>
                         <td>${{week}}</td>
                         <td>${{typeLabel}}</td>
@@ -698,39 +1147,53 @@ class WebVisualizationGenerator:
                         <td>${{((stats.std_dev ?? 0)).toFixed(2)}}</td>
                         <td>${{((stats.min ?? 0)).toFixed(2)}}</td>
                         <td>${{((stats.max ?? 0)).toFixed(2)}}</td>
+                        <td>${{top3Str}}</td>
                     </tr>`;
                 }});
 
                 tableHTML += '</tbody></table>';
-                tableContainer.innerHTML = tableHTML;
-                return;
-            }}
-
-            let tableHTML = '<table><thead><tr>';
-            if (type === 'daily') {{
-                tableHTML += '<th>日期</th>';
-            }} else if (type === 'weekly') {{
-                tableHTML += '<th>周次</th>';
             }} else {{
-                tableHTML += '<th>月份</th>';
+                tableHTML += '<table><thead><tr>';
+                if (type === 'daily') {{
+                    tableHTML += '<th>日期</th>';
+                }} else if (type === 'weekly') {{
+                    tableHTML += '<th>周次</th>';
+                }} else {{
+                    tableHTML += '<th>月份</th>';
+                }}
+                tableHTML += '<th>称重次数</th><th>重量均值(kg)</th><th>重量标准差</th><th>最小重量(kg)</th><th>最大重量(kg)</th><th>Top3商品(次数)</th></tr></thead><tbody>';
+
+                currentPageKeys.forEach(key => {{
+                    const stats = data[key];
+                    if (!stats) return;
+                    
+                    // 处理Top3商品数据
+                    let top3Str = '';
+                    if (stats.top3_products && stats.top3_products.length > 0) {{
+                        top3Str = stats.top3_products.map(item => `${{item[0]}}(${{item[1]}})`).join(', ');
+                    }}
+                    
+                    tableHTML += `<tr>
+                        <td>${{key}}</td>
+                        <td>${{stats.count}}</td>
+                        <td>${{((stats.mean ?? 0)).toFixed(2)}}</td>
+                        <td>${{((stats.std_dev ?? 0)).toFixed(2)}}</td>
+                        <td>${{((stats.min ?? 0)).toFixed(2)}}</td>
+                        <td>${{((stats.max ?? 0)).toFixed(2)}}</td>
+                        <td>${{top3Str}}</td>
+                    </tr>`;
+                }});
+
+                tableHTML += '</tbody></table>';
             }}
-            tableHTML += '<th>称重次数</th><th>重量均值(kg)</th><th>重量标准差</th><th>最小重量(kg)</th><th>最大重量(kg)</th></tr></thead><tbody>';
-
-            sortedKeys.forEach(key => {{
-                const stats = data[key];
-                if (!stats) return;
-                tableHTML += `<tr>
-                    <td>${{key}}</td>
-                    <td>${{stats.count}}</td>
-                    <td>${{((stats.mean ?? 0)).toFixed(2)}}</td>
-                    <td>${{((stats.std_dev ?? 0)).toFixed(2)}}</td>
-                    <td>${{((stats.min ?? 0)).toFixed(2)}}</td>
-                    <td>${{((stats.max ?? 0)).toFixed(2)}}</td>
-                </tr>`;
-            }});
-
-            tableHTML += '</tbody></table>';
+            
+            tableHTML += '</div>' + paginationHTML;
             tableContainer.innerHTML = tableHTML;
+        }}
+        
+        // 渲染数据表格（兼容旧版本，无分页）
+        function renderTable(tableId, data, type) {{
+            renderTableWithPagination(tableId, data, type);
         }}
         
         // 计算总体统计
@@ -760,12 +1223,254 @@ class WebVisualizationGenerator:
             document.getElementById('total-days').textContent = validDays;
         }}
         
+        // 异常分析相关函数
+        function showAnomalyTab(tabName) {{
+            // 隐藏所有异常标签页内容
+            const anomalyTabContents = document.querySelectorAll('.anomaly-tab-content');
+            anomalyTabContents.forEach(content => content.classList.remove('active'));
+            
+            // 移除所有异常标签页的active类
+            const anomalyNavTabs = document.querySelectorAll('#anomaly .nav-tab');
+            anomalyNavTabs.forEach(tab => tab.classList.remove('active'));
+            
+            // 显示选中的异常标签页
+            document.getElementById(tabName + '-anomalies').classList.add('active');
+            event.target.classList.add('active');
+            
+            // 渲染对应的表格
+            if (tabName === 'z-score') {{
+                renderAnomalyTableWithPagination('z-score-table', anomalyData?.z_score_anomalies || [], 'z-score');
+            }} else if (tabName === 'iqr') {{
+                renderAnomalyTableWithPagination('iqr-table', anomalyData?.iqr_anomalies || [], 'iqr');
+            }} else if (tabName === 'comparison') {{
+                renderComparisonTable();
+            }}
+        }}
+        
+        // 渲染异常数据表格（带分页）
+        function renderAnomalyTableWithPagination(tableId, anomalies, type) {{
+            const tableContainer = document.getElementById(tableId);
+            if (!anomalies || anomalies.length === 0) {{
+                tableContainer.innerHTML = '<div class="table-title">暂无异常数据</div>';
+                return;
+            }}
+            
+            const totalItems = anomalies.length;
+            const totalPages = Math.ceil(totalItems / paginationConfig.pageSize);
+            
+            // 更新分页状态
+            paginationState[type].totalPages = totalPages;
+            const currentPage = paginationState[type].currentPage;
+            
+            // 计算当前页的数据范围
+            const startIndex = (currentPage - 1) * paginationConfig.pageSize;
+            const endIndex = Math.min(startIndex + paginationConfig.pageSize, totalItems);
+            const currentPageAnomalies = anomalies.slice(startIndex, endIndex);
+            
+            // 生成分页控件HTML
+            const paginationHTML = createPaginationHTML(tableId, currentPage, totalPages, totalItems);
+            
+            // 生成表格HTML
+            let tableHTML = paginationHTML + '<div class="table-wrapper">';
+            tableHTML += '<table><thead><tr>';
+            
+            if (type === 'z-score') {{
+                tableHTML += '<th>数据点</th><th>Z-score值</th><th>异常程度</th><th>比值</th><th>称重AD值</th><th>零点AD值</th><th>重量(kg)</th><th>商品名称</th>';
+            }} else {{
+                tableHTML += '<th>数据点</th><th>比值</th><th>异常状态</th><th>称重AD值</th><th>零点AD值</th><th>重量(kg)</th><th>商品名称</th>';
+            }}
+            
+            tableHTML += '</tr></thead><tbody>';
+            
+            currentPageAnomalies.forEach(anomaly => {{
+                const severityClass = type === 'z-score' ? 
+                    (anomaly.anomaly === '轻度异常' ? 'mild' : 'severe') : 'outlier';
+                
+                tableHTML += '<tr>';
+                tableHTML += `<td>${{anomaly.index}}</td>`;
+                
+                if (type === 'z-score') {{
+                    tableHTML += `<td>${{anomaly.z_score.toFixed(4)}}</td>`;
+                    tableHTML += `<td><span class="anomaly-severity ${{severityClass}}">${{anomaly.anomaly}}</span></td>`;
+                    tableHTML += `<td>${{anomaly.ratio.toFixed(4)}}</td>`;
+                }} else {{
+                    tableHTML += `<td>${{anomaly.ratio.toFixed(4)}}</td>`;
+                    tableHTML += `<td><span class="anomaly-severity ${{severityClass}}">${{anomaly.anomaly}}</span></td>`;
+                }}
+                
+                tableHTML += `<td>${{anomaly.ad_value || '-'}}</td>`;
+                tableHTML += `<td>${{anomaly.zero_ad_value || '-'}}</td>`;
+                tableHTML += `<td>${{anomaly.weight || '-'}}</td>`;
+                tableHTML += `<td>${{anomaly.product_name || '-'}}</td>`;
+                tableHTML += '</tr>';
+            }});
+            
+            tableHTML += '</tbody></table></div>' + paginationHTML;
+            tableContainer.innerHTML = tableHTML;
+        }}
+        
+        // 渲染对比分析表格
+        function renderComparisonTable() {{
+            const tableContainer = document.getElementById('comparison-table');
+            if (!anomalyData) {{
+                tableContainer.innerHTML = '<div class="table-title">暂无对比数据</div>';
+                return;
+            }}
+            
+            const comparison = anomalyData.summary.comparison;
+            const zOnlyIndices = comparison.z_only_indices || [];
+            const iqrOnlyIndices = comparison.iqr_only_indices || [];
+            const commonIndices = comparison.common_indices || [];
+            
+            let tableHTML = '<div class="table-wrapper">';
+            tableHTML += '<table><thead><tr><th>异常类型</th><th>数量</th><th>数据点索引</th></tr></thead><tbody>';
+            
+            tableHTML += `<tr><td>Z-score独有异常</td><td>${{zOnlyIndices.length}}</td><td>${{zOnlyIndices.join(', ') || '无'}}</td></tr>`;
+            tableHTML += `<tr><td>IQR独有异常</td><td>${{iqrOnlyIndices.length}}</td><td>${{iqrOnlyIndices.join(', ') || '无'}}</td></tr>`;
+            tableHTML += `<tr><td>两种方法共同异常</td><td>${{commonIndices.length}}</td><td>${{commonIndices.join(', ') || '无'}}</td></tr>`;
+            
+            tableHTML += '</tbody></table></div>';
+            tableContainer.innerHTML = tableHTML;
+        }}
+        
+        // 渲染异常分析概览
+        function renderAnomalySummary() {{
+            if (!anomalyData) return;
+            
+            const summary = anomalyData.summary;
+            document.getElementById('total-records').textContent = summary.total_records.toLocaleString();
+            document.getElementById('z-anomaly-rate').textContent = summary.z_score_stats.anomaly_rate.toFixed(2) + '%';
+            document.getElementById('iqr-anomaly-rate').textContent = summary.iqr_stats.anomaly_rate.toFixed(2) + '%';
+            document.getElementById('common-anomalies').textContent = summary.comparison.common_count;
+        }}
+        
+        // 渲染异常分析图表
+        function renderAnomalyCharts() {{
+            if (!anomalyData) return;
+            
+            renderAnomalyComparisonChart();
+            renderZScoreDistributionChart();
+        }}
+        
+        // 渲染异常检测方法对比图表
+        function renderAnomalyComparisonChart() {{
+            const ctx = document.getElementById('anomalyComparisonChart').getContext('2d');
+            const summary = anomalyData.summary;
+            
+            new Chart(ctx, {{
+                type: 'doughnut',
+                data: {{
+                    labels: ['正常数据', 'Z-score异常', 'IQR异常', '共同异常'],
+                    datasets: [{{
+                        data: [
+                            summary.z_score_stats.normal_count,
+                            summary.z_score_stats.mild_anomaly_count + summary.z_score_stats.severe_anomaly_count,
+                            summary.iqr_stats.outlier_count,
+                            summary.comparison.common_count
+                        ],
+                        backgroundColor: [
+                            '#28a745',
+                            '#ffc107',
+                            '#dc3545',
+                            '#6f42c1'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        title: {{
+                            display: true,
+                            text: '异常检测方法对比分布'
+                        }},
+                        legend: {{
+                            position: 'bottom'
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // 渲染Z-score分布图表
+        function renderZScoreDistributionChart() {{
+            const ctx = document.getElementById('zScoreDistributionChart').getContext('2d');
+            const zAnomalies = anomalyData.z_score_anomalies || [];
+            
+            // 按异常程度分组
+            const mildAnomalies = zAnomalies.filter(a => a.anomaly === '轻度异常');
+            const severeAnomalies = zAnomalies.filter(a => a.anomaly === '重度异常');
+            
+            new Chart(ctx, {{
+                type: 'bar',
+                data: {{
+                    labels: ['轻度异常', '重度异常'],
+                    datasets: [{{
+                        label: '异常数量',
+                        data: [mildAnomalies.length, severeAnomalies.length],
+                        backgroundColor: ['#ffc107', '#dc3545'],
+                        borderColor: ['#e0a800', '#c82333'],
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: '异常数量'
+                            }}
+                        }},
+                        x: {{
+                            title: {{
+                                display: true,
+                                text: '异常程度'
+                            }}
+                        }}
+                    }},
+                    plugins: {{
+                        title: {{
+                            display: true,
+                            text: 'Z-score异常程度分布'
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // 动态加载异常数据
+        async function loadAnomalyData() {{
+            try {{
+                const response = await fetch('anomaly_data.json');
+                if (response.ok) {{
+                    anomalyData = await response.json();
+                    console.log('异常数据加载成功:', anomalyData);
+                    
+                    // 初始化异常分析
+                    renderAnomalySummary();
+                    renderAnomalyCharts();
+                }} else {{
+                    console.log('没有找到异常数据文件');
+                }}
+            }} catch (error) {{
+                console.log('加载异常数据失败:', error);
+            }}
+        }}
+        
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {{
             calculateSummaryStats();
-            renderTrendChart();
             renderDailyChart();
-            renderWeeklyCompareChart();
+            renderWeeklyCompareCountChart();
+            renderWeeklyCompareMeanChart();
+            
+            // 动态加载异常数据
+            loadAnomalyData();
         }});
     </script>
 </body>
