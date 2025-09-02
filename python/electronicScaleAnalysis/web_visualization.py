@@ -15,7 +15,7 @@ class WebVisualizationGenerator:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
     
-    def generate_html_page(self, statistics_data, anomaly_data=None):
+    def generate_html_page(self, statistics_data, anomaly_data=None, weight_time_anomaly_data=None):
         """生成HTML页面"""
         html_content = f"""
 <!DOCTYPE html>
@@ -432,7 +432,8 @@ class WebVisualizationGenerator:
                     <button class="nav-tab" onclick="showTab('weekly')">📆 每周统计</button>
                     <button class="nav-tab" onclick="showTab('monthly')">🗓️ 每月统计</button>
                     <button class="nav-tab" onclick="showTab('weeklyCompare')">⚖️ 周内 vs 周末</button>
-                    <button class="nav-tab" onclick="showTab('anomaly')">🚨 异常分析</button>
+                    <button class="nav-tab" onclick="showTab('anomaly')">🚨 失准异常分析</button>
+                    <button class="nav-tab" onclick="showTab('weightTimeAnomaly')">⚠️ 行为异常分析</button>
                 </div>
                 
                 <div id="daily" class="tab-content active">
@@ -462,7 +463,7 @@ class WebVisualizationGenerator:
                 <div id="weeklyCompare" class="tab-content">
                     <div class="table-title">每周 周内(工作日) 与 周末 对比</div>
                     <div class="chart-container">
-                        <div class="chart-title">📊 周内 vs 周末 称重次数对比</div>
+                        <div class="chart-title">📊 周内 vs 周末 日均称重次数对比</div>
                         <div class="chart-wrapper">
                             <canvas id="weeklyCompareCountChart"></canvas>
                         </div>
@@ -477,7 +478,7 @@ class WebVisualizationGenerator:
                 </div>
                 
                 <div id="anomaly" class="tab-content">
-                    <div class="table-title">🚨 称重数据异常分析</div>
+                    <div class="table-title">🚨 称重数据失准异常分析</div>
                     
                     <!-- 异常分析概览 -->
                     <div class="summary-stats" id="anomaly-summary">
@@ -514,6 +515,50 @@ class WebVisualizationGenerator:
                     </div>
 
                 </div>
+                
+                <div id="weightTimeAnomaly" class="tab-content">
+                    <div class="table-title">⚠️ 重量和时间异常分析</div>
+                    
+                    <!-- 异常分析概览 -->
+                    <div class="summary-stats" id="weight-time-anomaly-summary">
+                        <div class="summary-card">
+                            <h4>总记录数</h4>
+                            <div class="summary-value" id="total-records-wt">-</div>
+            </div>
+                        <div class="summary-card">
+                            <h4>重量异常数</h4>
+                            <div class="summary-value" id="weight-anomaly-count">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <h4>时间异常数</h4>
+                            <div class="summary-value" id="time-anomaly-count">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <h4>重量异常率</h4>
+                            <div class="summary-value" id="weight-anomaly-rate">-</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 异常分析图表 -->
+                    <div class="chart-container">
+                        <div class="chart-title">📊 异常类型分布</div>
+                        <div class="chart-wrapper">
+                            <canvas id="anomalyTypeChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 重量异常数据详情表格 -->
+                    <div class="data-table">
+                        <div class="table-title">📋 重量异常数据详情列表</div>
+                        <div id="weight-anomaly-table"></div>
+                    </div>
+                    
+                    <!-- 时间异常数据详情表格 -->
+                    <div class="data-table">
+                        <div class="table-title">📋 时间异常数据详情列表</div>
+                        <div id="time-anomaly-table"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -522,6 +567,7 @@ class WebVisualizationGenerator:
         // 数据变量
         let statisticsData = {json.dumps(statistics_data, ensure_ascii=False, default=str)};
         let anomalyData = {json.dumps(anomaly_data, ensure_ascii=False, default=str) if anomaly_data else 'null'};
+        let weightTimeAnomalyData = {json.dumps(weight_time_anomaly_data, ensure_ascii=False, default=str) if weight_time_anomaly_data else 'null'};
         
         // 分页配置
         const paginationConfig = {{
@@ -535,7 +581,10 @@ class WebVisualizationGenerator:
             weekly: {{ currentPage: 1, totalPages: 1 }},
             monthly: {{ currentPage: 1, totalPages: 1 }},
             weeklyCompare: {{ currentPage: 1, totalPages: 1 }},
-            anomaly: {{ currentPage: 1, totalPages: 1 }}
+            anomaly: {{ currentPage: 1, totalPages: 1 }},
+            weightTimeAnomaly: {{ currentPage: 1, totalPages: 1 }},
+            weightAnomaly: {{ currentPage: 1, totalPages: 1 }},
+            timeAnomaly: {{ currentPage: 1, totalPages: 1 }}
         }};
         
         // 分页工具函数
@@ -616,6 +665,12 @@ class WebVisualizationGenerator:
             }} else if (type === 'anomaly') {{
                 paginationState.anomaly.currentPage = Math.max(1, Math.min(page, paginationState.anomaly.totalPages));
                 renderAnomalyTableWithPagination(tableId, anomalyData ? anomalyData.z_score_anomalies : [], 'anomaly');
+            }} else if (type === 'weight-anomaly') {{
+                paginationState.weightAnomaly.currentPage = Math.max(1, Math.min(page, paginationState.weightAnomaly.totalPages));
+                renderWeightTimeAnomalyTableWithPagination(tableId, weightTimeAnomalyData ? weightTimeAnomalyData.weight_anomalies : [], 'weight-anomaly');
+            }} else if (type === 'time-anomaly') {{
+                paginationState.timeAnomaly.currentPage = Math.max(1, Math.min(page, paginationState.timeAnomaly.totalPages));
+                renderWeightTimeAnomalyTableWithPagination(tableId, weightTimeAnomalyData ? weightTimeAnomalyData.time_anomalies : [], 'time-anomaly');
             }} else {{
                 paginationState[type].currentPage = Math.max(1, Math.min(page, paginationState[type].totalPages));
                 renderTableWithPagination(tableId, statisticsData[type] || {{}}, type);
@@ -631,6 +686,12 @@ class WebVisualizationGenerator:
             }} else if (type === 'anomaly') {{
                 paginationState.anomaly.currentPage = 1;
                 renderAnomalyTableWithPagination(tableId, anomalyData ? anomalyData.z_score_anomalies : [], 'anomaly');
+            }} else if (type === 'weight-anomaly') {{
+                paginationState.weightAnomaly.currentPage = 1;
+                renderWeightTimeAnomalyTableWithPagination(tableId, weightTimeAnomalyData ? weightTimeAnomalyData.weight_anomalies : [], 'weight-anomaly');
+            }} else if (type === 'time-anomaly') {{
+                paginationState.timeAnomaly.currentPage = 1;
+                renderWeightTimeAnomalyTableWithPagination(tableId, weightTimeAnomalyData ? weightTimeAnomalyData.time_anomalies : [], 'time-anomaly');
             }} else {{
                 paginationState[type].currentPage = 1;
                 renderTableWithPagination(tableId, statisticsData[type] || {{}}, type);
@@ -670,6 +731,16 @@ class WebVisualizationGenerator:
                 }} else {{
                     // 如果异常数据还未加载，显示加载提示
                     document.getElementById('anomaly-summary').innerHTML = '<div class="table-title">正在加载异常数据...</div>';
+                }}
+            }} else if (tabName === 'weightTimeAnomaly') {{
+                if (weightTimeAnomalyData) {{
+                    renderWeightTimeAnomalyTableWithPagination('weight-anomaly-table', weightTimeAnomalyData.weight_anomalies || [], 'weight-anomaly');
+                    renderWeightTimeAnomalyTableWithPagination('time-anomaly-table', weightTimeAnomalyData.time_anomalies || [], 'time-anomaly');
+                    renderWeightTimeAnomalySummary();
+                    renderAnomalyTypeChart();
+                }} else {{
+                    // 如果异常数据还未加载，显示加载提示
+                    document.getElementById('weight-time-anomaly-summary').innerHTML = '<div class="table-title">正在加载重量时间异常数据...</div>';
                 }}
             }}
         }}
@@ -952,8 +1023,15 @@ class WebVisualizationGenerator:
                 }}
             }});
             const weeks = Object.keys(weekToParts).sort();
-            const weekdayCounts = weeks.map(w => (weekToParts[w].weekday ? weekToParts[w].weekday.count : 0));
-            const weekendCounts = weeks.map(w => (weekToParts[w].weekend ? weekToParts[w].weekend.count : 0));
+            // 计算日均称重次数：周内除以5天，周末除以2天
+            const weekdayCounts = weeks.map(w => {{
+                const weekdayData = weekToParts[w].weekday;
+                return weekdayData ? (weekdayData.count / 5) : 0;
+            }});
+            const weekendCounts = weeks.map(w => {{
+                const weekendData = weekToParts[w].weekend;
+                return weekendData ? (weekendData.count / 2) : 0;
+            }});
 
             new Chart(ctx, {{
                 type: 'bar',
@@ -961,14 +1039,14 @@ class WebVisualizationGenerator:
                     labels: weeks,
                     datasets: [
                         {{
-                            label: '周内称重次数',
+                            label: '周内日均称重次数',
                             data: weekdayCounts,
                             backgroundColor: 'rgba(102, 126, 234, 0.8)',
                             borderColor: '#667eea',
                             borderWidth: 1
                         }},
                         {{
-                            label: '周末称重次数',
+                            label: '周末日均称重次数',
                             data: weekendCounts,
                             backgroundColor: 'rgba(240, 147, 251, 0.8)',
                             borderColor: '#f093fb',
@@ -990,11 +1068,11 @@ class WebVisualizationGenerator:
                         }},
                         y: {{
                             beginAtZero: true,
-                            title: {{ display: true, text: '称重次数' }}
+                            title: {{ display: true, text: '日均称重次数' }}
                         }}
                     }},
                     plugins: {{
-                        title: {{ display: true, text: '每周 周内 vs 周末 称重次数对比' }}
+                        title: {{ display: true, text: '每周 周内 vs 周末 日均称重次数对比' }}
                     }}
                 }}
             }});
@@ -1099,7 +1177,7 @@ class WebVisualizationGenerator:
             if (type === 'weekly_weekday_weekend') {{
                 tableHTML += '<table><thead><tr>' +
                     '<th>周次</th><th>类型</th>' +
-                    '<th>称重次数</th><th>重量均值(kg)</th><th>重量标准差</th><th>最小重量(kg)</th><th>最大重量(kg)</th><th>Top3商品(次数)</th>' +
+                    '<th>日均称重次数</th><th>重量均值(kg)</th><th>重量标准差</th><th>最小重量(kg)</th><th>最大重量(kg)</th><th>Top3商品(次数)</th>' +
                     '</tr></thead><tbody>';
 
                 currentPageKeys.forEach(key => {{
@@ -1114,10 +1192,13 @@ class WebVisualizationGenerator:
                         top3Str = stats.top3_products.map(item => `${{item[0]}}(${{item[1]}})`).join(', ');
                     }}
                     
+                    // 计算日均称重次数：周内除以5天，周末除以2天
+                    const dailyCount = key.endsWith('_weekday') ? (stats.count / 5) : (key.endsWith('_weekend') ? (stats.count / 2) : stats.count);
+                    
                     tableHTML += `<tr>
                         <td>${{week}}</td>
                         <td>${{typeLabel}}</td>
-                        <td>${{stats.count}}</td>
+                        <td>${{dailyCount.toFixed(1)}}</td>
                         <td>${{((stats.mean ?? 0)).toFixed(2)}}</td>
                         <td>${{((stats.std_dev ?? 0)).toFixed(2)}}</td>
                         <td>${{((stats.min ?? 0)).toFixed(2)}}</td>
@@ -1313,7 +1394,122 @@ class WebVisualizationGenerator:
             }});
         }}
         
+        // 渲染重量时间异常分析概览
+        function renderWeightTimeAnomalySummary() {{
+            if (!weightTimeAnomalyData) return;
+            
+            const summary = weightTimeAnomalyData.summary;
+            document.getElementById('total-records-wt').textContent = summary.total_records.toLocaleString();
+            document.getElementById('weight-anomaly-count').textContent = summary.weight_anomaly_count.toLocaleString();
+            document.getElementById('time-anomaly-count').textContent = summary.time_anomaly_count.toLocaleString();
+            document.getElementById('weight-anomaly-rate').textContent = summary.weight_anomaly_rate.toFixed(2) + '%';
+        }}
+        
+        // 渲染异常类型分布图表
+        function renderAnomalyTypeChart() {{
+            const ctx = document.getElementById('anomalyTypeChart').getContext('2d');
+            const summary = weightTimeAnomalyData.summary;
+            
+            new Chart(ctx, {{
+                type: 'doughnut',
+                data: {{
+                    labels: ['正常数据', '重量异常', '时间异常'],
+                    datasets: [{{
+                        data: [
+                            summary.total_records - summary.weight_anomaly_count - summary.time_anomaly_count,
+                            summary.weight_anomaly_count,
+                            summary.time_anomaly_count
+                        ],
+                        backgroundColor: [
+                            '#28a745',
+                            '#ffc107',
+                            '#dc3545'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        title: {{
+                            display: true,
+                            text: '异常类型分布'
+                        }},
+                        legend: {{
+                            position: 'bottom'
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // 渲染重量时间异常数据表格（带分页）
+        function renderWeightTimeAnomalyTableWithPagination(tableId, anomalies, type) {{
+            const tableContainer = document.getElementById(tableId);
+            if (!anomalies || anomalies.length === 0) {{
+                tableContainer.innerHTML = '<div class="no-data">暂无异常数据</div>';
+                return;
+            }}
+            
+            const totalItems = anomalies.length;
+            const totalPages = Math.ceil(totalItems / paginationConfig.pageSize);
+            
+            // 更新分页状态
+            const stateType = type === 'weight-anomaly' ? 'weightAnomaly' : 'timeAnomaly';
+            paginationState[stateType].totalPages = totalPages;
+            const currentPage = paginationState[stateType].currentPage;
+            
+            // 计算当前页的数据范围
+            const startIndex = (currentPage - 1) * paginationConfig.pageSize;
+            const endIndex = Math.min(startIndex + paginationConfig.pageSize, totalItems);
+            const currentPageAnomalies = anomalies.slice(startIndex, endIndex);
+            
+            // 生成分页控件HTML
+            const paginationHTML = createPaginationHTML(tableId, currentPage, totalPages, totalItems);
+            
+            // 生成表格HTML
+            let tableHTML = paginationHTML + '<div class="table-wrapper">';
+            
+            if (type === 'weight-anomaly') {{
+                tableHTML += '<table><thead><tr>' +
+                    '<th>序号</th><th>重量(kg)</th><th>商品名称</th><th>订单时间</th><th>创建时间</th><th>异常描述</th>' +
+                    '</tr></thead><tbody>';
 
+                currentPageAnomalies.forEach((anomaly, index) => {{
+                    const globalIndex = startIndex + index + 1;
+                    tableHTML += `<tr>
+                        <td>${{globalIndex}}</td>
+                        <td>${{anomaly.weight.toFixed(2)}}</td>
+                        <td>${{anomaly.product_name || '-'}}</td>
+                        <td>${{anomaly.order_time || '-'}}</td>
+                        <td>${{anomaly.create_time || '-'}}</td>
+                        <td><span class="anomaly-severity severe">${{anomaly.anomaly_description}}</span></td>
+                    </tr>`;
+                }});
+            }} else if (type === 'time-anomaly') {{
+                tableHTML += '<table><thead><tr>' +
+                    '<th>序号</th><th>重量(kg)</th><th>商品名称</th><th>订单时间</th><th>创建时间</th><th>时间差(分钟)</th><th>异常描述</th>' +
+                    '</tr></thead><tbody>';
+
+                currentPageAnomalies.forEach((anomaly, index) => {{
+                    const globalIndex = startIndex + index + 1;
+                    tableHTML += `<tr>
+                        <td>${{globalIndex}}</td>
+                        <td>${{anomaly.weight.toFixed(2)}}</td>
+                        <td>${{anomaly.product_name || '-'}}</td>
+                        <td>${{anomaly.order_time || '-'}}</td>
+                        <td>${{anomaly.create_time || '-'}}</td>
+                        <td>${{anomaly.time_diff_minutes.toFixed(1)}}</td>
+                        <td><span class="anomaly-severity severe">${{anomaly.anomaly_description}}</span></td>
+                    </tr>`;
+                }});
+            }}
+
+            tableHTML += '</tbody></table></div>' + paginationHTML;
+            tableContainer.innerHTML = tableHTML;
+        }}
         
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {{
@@ -1326,6 +1522,12 @@ class WebVisualizationGenerator:
             if (anomalyData) {{
                 renderAnomalySummary();
                 renderAnomalyCharts();
+            }}
+            
+            // 初始化重量时间异常分析（数据已嵌入页面）
+            if (weightTimeAnomalyData) {{
+                renderWeightTimeAnomalySummary();
+                renderAnomalyTypeChart();
             }}
         }});
     </script>
@@ -1356,8 +1558,12 @@ class WebVisualizationGenerator:
             print("正在分析异常数据...")
             anomaly_data = csv_processor.single_scale_example_usage()
             
+            # 获取重量和时间异常数据
+            print("正在分析重量和时间异常数据...")
+            weight_time_anomaly_data = csv_processor.detect_weight_and_time_anomalies()
+            
             # 生成HTML页面
-            html_file_path = self.generate_html_page(statistics_data, anomaly_data)
+            html_file_path = self.generate_html_page(statistics_data, anomaly_data, weight_time_anomaly_data)
             
             print(f"可视化网页已生成: {html_file_path}")
             

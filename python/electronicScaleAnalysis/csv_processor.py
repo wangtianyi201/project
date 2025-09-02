@@ -577,6 +577,229 @@ def single_scale_example_usage():
 
 
 """
+检测称重数据中的异常情况
+"""
+def detect_weight_and_time_anomalies():
+    """检测称重数据中的异常情况：
+    1. 称重重量大于20kg的数据
+    2. 订单时间与创建时间差距过大（超过10分钟）或订单时间晚于创建时间
+    
+    Returns:
+        dict: 包含异常分析结果的字典
+    """
+    # 获取当前目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 定义文件路径
+    data_file = os.path.join(current_dir, '设备L30DG0071_称重数据_20000条.csv')
+    
+    # 检查文件是否存在
+    if not os.path.exists(data_file):
+        print(f"错误: 找不到数据文件 '{data_file}'")
+        return None
+    
+    # 创建CSV处理器
+    processor = CSVProcessor()
+    
+    try:
+        # 读取数据
+        data = processor.read_csv(data_file)
+        print(f"成功读取 {len(data)} 条记录")
+    except FileNotFoundError as e:
+        print(e)
+        return None
+    
+    # 检查数据是否包含必要的列
+    if not data:
+        print("错误: 数据文件为空")
+        return None
+    
+    # 查找必要的列
+    weight_column = None
+    order_time_column = None
+    create_time_column = None
+    product_column = None
+    
+    # 查找重量列
+    for col in data[0].keys():
+        if '重量' in col:
+            weight_column = col
+            break
+    
+    # 查找订单时间列
+    for col in data[0].keys():
+        if '订单时间' in col or '称重时间' in col:
+            order_time_column = col
+            break
+    
+    # 查找创建时间列
+    for col in data[0].keys():
+        if '创建时间' in col:
+            create_time_column = col
+            break
+    
+    # 查找商品名称列
+    for col in data[0].keys():
+        if ('商品' in col) or ('品名' in col) or ('产品' in col) or ('菜品' in col):
+            product_column = col
+            break
+    
+    if not weight_column:
+        print(f"错误: 缺少重量列")
+        print(f"可用列: {list(data[0].keys())}")
+        return None
+    
+    print(f"使用重量列: {weight_column}")
+    if order_time_column:
+        print(f"使用订单时间列: {order_time_column}")
+    if create_time_column:
+        print(f"使用创建时间列: {create_time_column}")
+    if product_column:
+        print(f"使用商品列: {product_column}")
+    
+    # 异常检测结果
+    anomaly_result = {
+        'total_records': len(data),
+        'weight_anomalies': [],  # 重量异常
+        'time_anomalies': [],    # 时间异常
+        'summary': {
+            'total_records': len(data),
+            'weight_anomaly_count': 0,
+            'time_anomaly_count': 0,
+            'weight_anomaly_rate': 0.0,
+            'time_anomaly_rate': 0.0
+        }
+    }
+    
+    # 数据预处理和异常检测
+    import datetime
+    
+    for i, row in enumerate(data):
+        try:
+            # 检测重量异常（>20kg）
+            weight = float(row[weight_column])
+            if weight > 20.0:
+                weight_anomaly = {
+                    'index': i + 1,
+                    'weight': weight,
+                    'product_name': row.get(product_column, '-') if product_column else '-',
+                    'order_time': row.get(order_time_column, '-') if order_time_column else '-',
+                    'create_time': row.get(create_time_column, '-') if create_time_column else '-',
+                    'anomaly_type': '重量异常',
+                    'anomaly_description': f'重量 {weight:.2f}kg 超过20kg阈值'
+                }
+                anomaly_result['weight_anomalies'].append(weight_anomaly)
+                anomaly_result['summary']['weight_anomaly_count'] += 1
+            
+            # 检测时间异常（如果有订单时间和创建时间列）
+            if order_time_column and create_time_column:
+                order_time_str = row.get(order_time_column, '')
+                create_time_str = row.get(create_time_column, '')
+                
+                if order_time_str and create_time_str:
+                    # 尝试解析时间
+                    order_time = None
+                    create_time = None
+                    
+                    # 常见时间格式
+                    time_formats = [
+                        '%Y-%m-%dT%H:%M:%S',  # ISO 8601格式
+                        '%Y-%m-%d %H:%M:%S',
+                        '%Y/%m/%d %H:%M:%S',
+                        '%Y-%m-%d %H:%M',
+                        '%Y/%m/%d %H:%M',
+                        '%Y-%m-%d',
+                        '%Y/%m/%d'
+                    ]
+                    
+                    # 解析订单时间
+                    for fmt in time_formats:
+                        try:
+                            order_time = datetime.datetime.strptime(order_time_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    
+                    # 解析创建时间
+                    for fmt in time_formats:
+                        try:
+                            create_time = datetime.datetime.strptime(create_time_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    
+                    if order_time and create_time:
+                        # 计算时间差（分钟）
+                        time_diff_minutes = (create_time - order_time).total_seconds() / 60
+                        
+                        # 检测时间异常
+                        is_time_anomaly = False
+                        anomaly_description = ""
+                        
+                        if time_diff_minutes > 1440:
+                            is_time_anomaly = True
+                            anomaly_description = f"创建时间比订单时间晚 {time_diff_minutes:.1f} 分钟（超过1天阈值）"
+                        elif time_diff_minutes < 0:
+                            is_time_anomaly = True
+                            anomaly_description = f"创建时间比订单时间早 {abs(time_diff_minutes):.1f} 分钟"
+                        
+                        if is_time_anomaly:
+                            time_anomaly = {
+                                'index': i + 1,
+                                'weight': weight,
+                                'product_name': row.get(product_column, '-') if product_column else '-',
+                                'order_time': order_time_str,
+                                'create_time': create_time_str,
+                                'time_diff_minutes': time_diff_minutes,
+                                'anomaly_type': '时间异常',
+                                'anomaly_description': anomaly_description
+                            }
+                            anomaly_result['time_anomalies'].append(time_anomaly)
+                            anomaly_result['summary']['time_anomaly_count'] += 1
+        
+        except (ValueError, KeyError) as e:
+            continue
+    
+    # 计算异常率
+    total_records = anomaly_result['summary']['total_records']
+    if total_records > 0:
+        anomaly_result['summary']['weight_anomaly_rate'] = (anomaly_result['summary']['weight_anomaly_count'] / total_records) * 100
+        anomaly_result['summary']['time_anomaly_rate'] = (anomaly_result['summary']['time_anomaly_count'] / total_records) * 100
+    
+    # 输出异常检测结果
+    print("\n" + "="*80)
+    print("称重数据异常检测结果")
+    print("="*80)
+    print(f"总记录数: {total_records}")
+    print(f"重量异常数: {anomaly_result['summary']['weight_anomaly_count']} ({anomaly_result['summary']['weight_anomaly_rate']:.2f}%)")
+    print(f"时间异常数: {anomaly_result['summary']['time_anomaly_count']} ({anomaly_result['summary']['time_anomaly_rate']:.2f}%)")
+    
+    # 输出重量异常详情
+    if anomaly_result['weight_anomalies']:
+        print(f"\n重量异常详情 (共{len(anomaly_result['weight_anomalies'])}条):")
+        print("-" * 100)
+        print(f"{'序号':<8}{'重量(kg)':<12}{'商品名称':<20}{'订单时间':<20}{'创建时间':<20}{'异常描述':<30}")
+        print("-" * 100)
+        for anomaly in anomaly_result['weight_anomalies'][:10]:  # 只显示前10条
+            print(f"{anomaly['index']:<8}{anomaly['weight']:<12.2f}{anomaly['product_name']:<20}{anomaly['order_time']:<20}{anomaly['create_time']:<20}{anomaly['anomaly_description']:<30}")
+        if len(anomaly_result['weight_anomalies']) > 10:
+            print(f"... 还有 {len(anomaly_result['weight_anomalies']) - 10} 条重量异常记录")
+    
+    # 输出时间异常详情
+    if anomaly_result['time_anomalies']:
+        print(f"\n时间异常详情 (共{len(anomaly_result['time_anomalies'])}条):")
+        print("-" * 120)
+        print(f"{'序号':<8}{'重量(kg)':<12}{'商品名称':<20}{'订单时间':<20}{'创建时间':<20}{'时间差(分钟)':<15}{'异常描述':<30}")
+        print("-" * 120)
+        for anomaly in anomaly_result['time_anomalies'][:10]:  # 只显示前10条
+            print(f"{anomaly['index']:<8}{anomaly['weight']:<12.2f}{anomaly['product_name']:<20}{anomaly['order_time']:<20}{anomaly['create_time']:<20}{anomaly['time_diff_minutes']:<15.1f}{anomaly['anomaly_description']:<30}")
+        if len(anomaly_result['time_anomalies']) > 10:
+            print(f"... 还有 {len(anomaly_result['time_anomalies']) - 10} 条时间异常记录")
+    
+    return anomaly_result
+
+
+"""
 按时间分组统计称重数据
 """
 def time_based_weight_statistics():
@@ -1093,11 +1316,13 @@ def time_based_weight_statistics():
 
 
 if __name__ == '__main__':
-    # 1、单台秤的称重失准异常分析
-    single_scale_example_usage()
-    
-    # 2、按时间分组的称重统计
-    print("\n" + "="*100)
-    print("开始按时间分组统计称重数据...")
-    print("="*100)
-    time_based_weight_statistics()
+    # # 1、单台秤的称重失准异常分析
+    # single_scale_example_usage()
+    #
+    # # 2、按时间分组的称重统计
+    # print("\n" + "="*100)
+    # print("开始按时间分组统计称重数据...")
+    # print("="*100)
+    # time_based_weight_statistics()
+
+    detect_weight_and_time_anomalies()
